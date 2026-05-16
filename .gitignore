@@ -1,0 +1,38 @@
+# Binaries
+/app
+/insider-one-devops
+/bin/
+*.exe
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+!terraform/*.tfvars.example
+terraform/.terraform.lock.hcl
+
+# Helm
+charts/*/charts/
+charts/*/Chart.lock
+
+# Kube / dev artifacts
+kubeconfig
+*.kubeconfig
