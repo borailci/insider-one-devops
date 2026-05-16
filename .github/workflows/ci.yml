@@ -14,7 +14,7 @@ permissions:
   pull-requests: read
 
 env:
-  GO_VERSION: "1.23"
+  GO_VERSION: "1.25"
   IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/insider-one-devops
   AWS_REGION: eu-central-1
 

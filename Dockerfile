@@ -2,7 +2,7 @@
 # Multi-stage: static Go build → distroless non-root final image.
 # Final image target: < 25 MB, no shell, no package manager.
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25
 ARG DISTROLESS_TAG=nonroot
 
 # --- Builder ---------------------------------------------------------------
