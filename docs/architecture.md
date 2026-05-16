@@ -1,0 +1,110 @@
+# Architecture
+
+The system is intentionally small: one stateless Go service, one Kubernetes cluster (minikube on EC2), one CI pipeline, one observability stack. Every box below traces to one or more requirements in [`SPEC.md`](../SPEC.md).
+
+## Topology
+
+```
+                                ┌───────────────────────────────────────────┐
+                                │              github.com                   │
+                                │                                           │
+   developer ──push/PR─►   ┌────┴────────┐  webhook    ┌────────────────┐   │
+                           │  borailci/  │────────────►│ GitHub Actions │   │
+                           │ insider-one-│             │     (CI)       │   │
+                           │   devops    │             └────────┬───────┘   │
+                           └────┬────────┘                      │           │
+                                │  push image                   │           │
+                                │  ghcr.io/<owner>/             │           │
+                                │  insider-one-devops:<sha>     │           │
+                                ▼                               │           │
+                           ┌─────────────┐                      │           │
+                           │    GHCR     │◄─── docker login ────┘           │
+                           └─────────────┘                                  │
+                                                                            │
+                                  OIDC AssumeRoleWithWebIdentity            │
+                                ┌─────────────────────────────────────────► │
+                                ▼                                           │
+   ┌───────────── AWS (eu-central-1) ─────────────┐                         │
+   │                                              │                         │
+   │   ┌──────────────┐    ┌───────────────────┐  │                         │
+   │   │ IAM role     │    │ SSM SendCommand   │  │                         │
+   │   │ insider-one- │    │  → EC2 instance   │  │                         │
+   │   │ devops-      │    │  → kubectl set    │  │                         │
+   │   │ github-      │    │    image          │  │                         │
+   │   │ deploy       │    └─────────┬─────────┘  │                         │
+   │   └──────────────┘              │            │                         │
+   │                                 ▼            │                         │
+   │   ┌────────── EC2 t3.micro (AL2023) ──────┐  │                         │
+   │   │                                       │  │                         │
+   │   │   ┌───────────────────────────────┐   │  │                         │
+   │   │   │           minikube            │   │  │                         │
+   │   │   │   ┌─────────────────────┐     │   │  │                         │
+   │   │   │   │     ingress-nginx   │◄────┼───┼──┼── 80/443  ──────────────┤
+   │   │   │   └──────────┬──────────┘     │   │  │   Elastic IP            │
+   │   │   │              │ Host: app...   │   │  │                         │
+   │   │   │              ▼                │   │  │                         │
+   │   │   │       ┌──────────────┐        │   │  │                         │
+   │   │   │       │ Service / app│        │   │  │                         │
+   │   │   │       │  ClusterIP   │        │   │  │                         │
+   │   │   │       └──────┬───────┘        │   │  │                         │
+   │   │   │              ▼                │   │  │                         │
+   │   │   │       ┌──────────────┐        │   │  │                         │
+   │   │   │       │ Deployment   │        │   │  │                         │
+   │   │   │       │  app (Go)    │        │   │  │                         │
+   │   │   │       │ /ping        │        │   │  │                         │
+   │   │   │       │ /healthz     │        │   │  │                         │
+   │   │   │       │ /version     │        │   │  │                         │
+   │   │   │       │ /metrics     │◄───────┼───┼──┼── scrape ───────────────┤
+   │   │   │       └──────────────┘        │   │  │                         │
+   │   │   │                               │   │  │                         │
+   │   │   │   ┌─── ns: monitoring ────┐   │   │  │                         │
+   │   │   │   │  kube-prometheus-     │   │   │  │                         │
+   │   │   │   │  stack (best effort   │   │   │  │                         │
+   │   │   │   │  on t3.micro)         │   │   │  │                         │
+   │   │   │   │  • Prometheus         │   │   │  │                         │
+   │   │   │   │  • Grafana            │   │   │  │                         │
+   │   │   │   │  • Alertmanager       │   │   │  │                         │
+   │   │   │   └───────────────────────┘   │   │  │                         │
+   │   │   └───────────────────────────────┘   │  │                         │
+   │   └───────────────────────────────────────┘  │                         │
+   └──────────────────────────────────────────────┘                         │
+                                                                            │
+                                              ┌─────────────────────────────┘
+                                              │
+                                          end user
+                                          (curl / browser)
+```
+
+## Component map → requirements
+
+| Component                          | SPEC ref                | File path                                                 |
+|------------------------------------|-------------------------|-----------------------------------------------------------|
+| Go service (`/ping /healthz /version /metrics`) | FR-1..FR-8              | `main.go`, `main_test.go`                                 |
+| Multi-stage distroless image       | FR-9..FR-11, NFR-2..3   | `Dockerfile`                                              |
+| GHCR registry push                 | FR-12, AC-13            | `.github/workflows/ci.yml` → `build-scan-push` job        |
+| Helm chart (Deploy/Svc/Ingress/CM) | FR-13..FR-18            | `charts/app/`                                             |
+| GH Actions pipeline                | FR-19..FR-22, NFR-9     | `.github/workflows/ci.yml`                                |
+| GitHub OIDC ↔ AWS                  | FR-21, AC-25            | `terraform/iam-oidc.tf`                                   |
+| EC2 + EIP + Security Group         | FR-23, AC-26, AC-28     | `terraform/ec2.tf`                                        |
+| Bootstrap (docker + minikube + helm) | FR-24, AC-27          | `scripts/bootstrap-ec2.sh`                                |
+| kube-prometheus-stack              | FR-26                   | `scripts/bootstrap-ec2.sh` (helm install step)            |
+| ServiceMonitor                     | FR-27, AC-30            | `charts/app/templates/servicemonitor.yaml`                |
+| Grafana dashboard                  | FR-28, AC-31            | `dashboards/app.json`                                     |
+| PrometheusRule alert               | FR-29, AC-32            | `charts/app/templates/prometheusrule.yaml`                |
+| RUNBOOK / SECURITY / ADRs          | FR-30..FR-33            | `RUNBOOK.md`, `SECURITY.md`, `docs/adr/`                  |
+
+## Trust boundaries
+
+1. **GitHub Actions → AWS.** The CI deploy job assumes `insider-one-devops-github-deploy` via OIDC. The trust policy restricts the `sub` claim to `repo:borailci/insider-one-devops:ref:refs/heads/main` and `…:environment:prod`. No long-lived AWS keys exist in the repo or GH secrets.
+2. **AWS → EC2.** CI never opens a port on the EC2 host. It calls `ssm:SendCommand` against the instance, which uses the SSM agent running on the host with `AmazonSSMManagedInstanceCore`. The Security Group's only inbound rules are 22 (operator CIDR), 80, 443 — the Kubernetes API is **not** exposed.
+3. **Public → ingress.** All inbound from the internet terminates at `ingress-nginx` on the host, then routes by `Host` header to the in-cluster Service. The app container itself listens on 8080 inside the pod and is never directly reachable from outside.
+4. **GHCR.** Image pulls on EC2 are unauthenticated (public package). Pushes from CI use `GITHUB_TOKEN` with `packages: write`.
+
+## Data flow on a normal request
+
+1. Client `curl http://<EIP>/ping -H 'Host: app.insider-one.example'`.
+2. iptables PREROUTING DNATs `<EIP>:80` → minikube IP `:80` (set up by bootstrap).
+3. `ingress-nginx` matches the host header and forwards to Service `app-app:80`.
+4. Service routes to a pod IP on port 8080.
+5. Go handler logs an access-log line (JSON), increments `http_requests_total{path="/ping",status="200"}`, returns `pong`.
+6. Response retraces the path. `X-Request-ID` is set on the way back.

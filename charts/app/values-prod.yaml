@@ -19,3 +19,9 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+
+serviceMonitor:
+  enabled: true
+
+prometheusRule:
+  enabled: true

@@ -74,3 +74,26 @@ containerSecurityContext:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# --- Observability (Day 4) -------------------------------------------------
+# Disabled by default — values-prod.yaml flips both on. The chart still
+# renders cleanly when these stay off (CRDs may not exist on dev clusters).
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  # Match label that kube-prometheus-stack selects on by default.
+  labels:
+    release: kps
+
+prometheusRule:
+  enabled: false
+  labels:
+    release: kps
+  # Thresholds match AC-32: > 5% 5xx for 2 m sustained.
+  errorRate:
+    threshold: 0.05
+    forDuration: 2m
+  appDown:
+    forDuration: 2m

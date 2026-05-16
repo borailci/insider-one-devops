@@ -1,0 +1,37 @@
+{{- if .Values.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: {{ include "app.fullname" . }}.rules
+      rules:
+        - alert: AppDown
+          expr: |
+            sum(up{job="{{ include "app.fullname" . }}"}) == 0
+          for: {{ .Values.prometheusRule.appDown.forDuration }}
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ include "app.fullname" . }} is unreachable"
+            description: "No pods reporting up=1 for {{ .Values.prometheusRule.appDown.forDuration }}."
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="{{ include "app.fullname" . }}",status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{job="{{ include "app.fullname" . }}"}[5m]))
+            ) > {{ .Values.prometheusRule.errorRate.threshold }}
+          for: {{ .Values.prometheusRule.errorRate.forDuration }}
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ include "app.fullname" . }} 5xx rate above {{ .Values.prometheusRule.errorRate.threshold }}"
+            description: "5xx ratio exceeded {{ .Values.prometheusRule.errorRate.threshold }} for {{ .Values.prometheusRule.errorRate.forDuration }}."
+{{- end }}

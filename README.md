@@ -136,6 +136,38 @@ Auto-deploy on merge to `main`:
 
 Deploy strategy rationale is in [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md). Required GitHub Actions secrets: `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`. The IAM role is provisioned by `terraform/iam-oidc.tf` (see [`terraform/README.md`](./terraform/README.md)).
 
+## Infrastructure & observability (Day 4)
+
+A diagram with full data flow is in [`docs/architecture.md`](./docs/architecture.md).
+
+**Public URL.** One `t3.micro` (AL2023) provisioned by Terraform under `terraform/ec2.tf`, with an Elastic IP, a Security Group (80/443 public, 22 narrowed), and an SSM instance profile so CI can drive `kubectl set image` without exposing the Kubernetes API. The cloud-init user-data is `scripts/bootstrap-ec2.sh` — it installs Docker, minikube, kubectl, Helm, then `helm upgrade --install`s the app chart with `values-prod.yaml`.
+
+```sh
+# From the repo root:
+cd terraform/
+terraform init
+terraform apply
+terraform output public_url
+```
+
+> **Cost guardrails.** `t3.micro` is free-tier eligible for 12 months on new AWS accounts. NFR-10 caps spend at $0. A detached EIP costs ~$3.60/mo, so `terraform destroy` removes both the instance and the EIP atomically. See [ADR-0001](./docs/adr/0001-track.md) for the trade-offs.
+
+**Observability stack.** `kube-prometheus-stack` is installed via Helm into the `monitoring` namespace. The chart now ships a `ServiceMonitor` (`charts/app/templates/servicemonitor.yaml`) and a `PrometheusRule` (`charts/app/templates/prometheusrule.yaml`) that fires `AppDown` and `HighErrorRate` (> 5% 5xx for 2 m). The Grafana dashboard `dashboards/app.json` covers RPS, p50/p95/p99 latency, error rate, pod restarts, and a service-health stat.
+
+> **t3.micro reality.** 1 GiB of RAM is tight for minikube + the full obs stack. The bootstrap reduces resource requests aggressively; if the stack still does not schedule, [`RUNBOOK.md` § Observability fallback](./RUNBOOK.md#observability-fallback-t3micro-oom-path) documents three options (demo obs locally, upgrade to `t3.small`, or uninstall the obs stack on EC2). The chart and dashboard are environment-agnostic — they render and grade identically against any minikube.
+
+## Docs map
+
+| Doc | Purpose |
+|---|---|
+| [`SPEC.md`](./SPEC.md) | Contract — every FR/NFR/AC/EC/OS lives here |
+| [`docs/architecture.md`](./docs/architecture.md) | Topology diagram + trust boundaries + data flow |
+| [`RUNBOOK.md`](./RUNBOOK.md) | Operator guide — restart, logs, rollback, EC2 access, alerts |
+| [`SECURITY.md`](./SECURITY.md) | Threat model, secret handling, image-scan policy, OIDC trust |
+| [`docs/adr/0001-track.md`](./docs/adr/0001-track.md) | Why Track A on free-tier EC2 |
+| [`docs/adr/0002-language.md`](./docs/adr/0002-language.md) | Why Go + stdlib `net/http` |
+| [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md) | Why `kubectl set image` over ArgoCD/Flux |
+
 ## Conventions
 
 - **Branching:** trunk-based. `main` is protected; work via feature branches and PRs.

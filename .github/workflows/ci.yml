@@ -64,7 +64,8 @@ jobs:
       - run: helm lint charts/app -f charts/app/values-prod.yaml
       - run: |
           helm template app charts/app -f charts/app/values-prod.yaml \
-            | kubeconform -strict -summary -kubernetes-version 1.30.0
+            | kubeconform -strict -summary -kubernetes-version 1.30.0 \
+                -skip ServiceMonitor,PrometheusRule
 
   gitleaks:
     name: gitleaks (secret scan)

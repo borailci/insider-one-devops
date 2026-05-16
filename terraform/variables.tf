@@ -30,3 +30,27 @@ variable "ec2_instance_id" {
   type        = string
   default     = ""
 }
+
+variable "instance_type" {
+  description = "EC2 instance type. t3.micro is free-tier eligible for 12 months on new accounts."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "operator_cidr" {
+  description = "CIDR allowed to SSH (22/tcp) to the EC2 host. Set to your home/office IP/32. Defaults to 0.0.0.0/0 — narrow it before applying."
+  type        = string
+  default     = "0.0.0.0/0"
+}
+
+variable "ssh_public_key" {
+  description = "SSH public key material to install on the EC2 host (`ec2-user` on AL2023). Leave empty to skip key creation and rely on SSM Session Manager."
+  type        = string
+  default     = ""
+}
+
+variable "project_tag" {
+  description = "Value for the `Project` tag applied to every resource — used by AC-26 (single tagged stack) and AC-29 (cost allocation)."
+  type        = string
+  default     = "insider-one-devops"
+}
