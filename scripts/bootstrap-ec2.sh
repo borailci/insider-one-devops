@@ -64,9 +64,11 @@ sudo -u ec2-user git clone --depth=1 "https://github.com/${REPO_OWNER}/${REPO_NA
 # --- 4. Start minikube (constrained for t3.micro) -------------------------
 
 log "starting minikube"
+# --memory tuned for t3.medium (4 GiB total, ~3.5 GiB usable). On t3.small drop to 1500.
+# On t3.micro (1 GiB) the obs stack does not fit; that path is documented in RUNBOOK §Observability fallback.
 sudo -iu ec2-user bash -c "minikube start \
     --driver=docker \
-    --memory=900 \
+    --memory=3000 \
     --cpus=2 \
     --kubernetes-version=${KUBECTL_VERSION}"
 
@@ -98,20 +100,14 @@ sudo -iu ec2-user bash -c "helm upgrade --install ${RELEASE_NAME} ${CHART_DIR} \
 log "adding prometheus-community helm repo"
 sudo -iu ec2-user bash -c "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update"
 
-log "attempting kube-prometheus-stack install (best-effort on t3.micro)"
+log "installing kube-prometheus-stack"
 sudo -iu ec2-user bash -c "helm upgrade --install kps prometheus-community/kube-prometheus-stack \
     --namespace ${MONITORING_NAMESPACE} \
     --create-namespace \
-    --set prometheus.prometheusSpec.resources.requests.memory=200Mi \
-    --set prometheus.prometheusSpec.resources.requests.cpu=50m \
     --set prometheus.prometheusSpec.retention=2d \
     --set prometheus.prometheusSpec.scrapeInterval=30s \
-    --set grafana.resources.requests.memory=80Mi \
-    --set grafana.resources.requests.cpu=20m \
-    --set alertmanager.alertmanagerSpec.resources.requests.memory=40Mi \
-    --set alertmanager.alertmanagerSpec.resources.requests.cpu=10m \
     --set defaultRules.create=true \
-    --wait --timeout 5m" \
-  || log "WARN: kube-prometheus-stack did not become Ready on t3.micro — see RUNBOOK §Observability fallback"
+    --wait --timeout 8m" \
+  || log "WARN: kube-prometheus-stack did not become Ready — see RUNBOOK §Observability fallback"
 
 log "bootstrap complete"

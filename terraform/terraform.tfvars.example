@@ -1,0 +1,12 @@
+# Example: copy to terraform.tfvars (gitignored) and edit before `terraform apply`.
+
+# t3.medium: 2 vCPU / 4 GiB — comfortable for minikube + ingress + app + kube-prometheus-stack.
+# t3.small:  2 vCPU / 2 GiB — minimum viable; obs stack may not fit.
+# t3.micro:  2 vCPU / 1 GiB — app-only; obs stack will not fit.
+instance_type = "t3.medium"
+
+# Your IP/32 — get it with `curl -4 ifconfig.me`. Narrows SSH (22/tcp) to you only.
+# operator_cidr = "203.0.113.42/32"
+
+# Optional: enable SSH (otherwise rely on SSM Session Manager).
+# ssh_public_key = "ssh-ed25519 AAAA... user@host"
