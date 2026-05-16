@@ -1,0 +1,21 @@
+title = "insider-one-devops gitleaks config"
+
+# Extend the upstream default rules; do not redefine them.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repo-specific false-positive allowlist"
+paths = [
+  '''\.env\.example$''',
+  '''^docs/adr/''',
+  '''^SPEC\.md$''',
+  '''^README\.md$''',
+  '''^charts/app/values.*\.yaml$''',
+]
+# Common placeholder strings used in docs/values that resemble secrets.
+regexes = [
+  '''AKIA[0-9A-Z]{16}EXAMPLE''',
+  '''example-?token''',
+  '''dummy-?secret''',
+]

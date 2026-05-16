@@ -27,7 +27,7 @@ terraform/*.tfstate
 terraform/*.tfstate.backup
 terraform/*.tfvars
 !terraform/*.tfvars.example
-terraform/.terraform.lock.hcl
+# NOTE: terraform/.terraform.lock.hcl is intentionally checked in (provider pinning).
 
 # Helm
 charts/*/charts/

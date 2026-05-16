@@ -101,6 +101,41 @@ Install against a local cluster:
 helm upgrade --install app charts/app -f charts/app/values-dev.yaml
 ```
 
+## CI/CD (Day 3)
+
+Single workflow at `.github/workflows/ci.yml` runs on every push to `main` and every PR. Job graph:
+
+```
+ ┌──────┐  ┌──────┐  ┌──────────────┐  ┌─────────┐
+ │ lint │  │ test │  │ helm-validate│  │ gitleaks│
+ └──┬───┘  └──┬───┘  └──────┬───────┘  └────┬────┘
+    └─────────┴─────────────┴────────────────┘
+                       │
+              ┌────────▼─────────┐
+              │ build-scan-push  │  buildx → Trivy (CRITICAL/HIGH = fail) → GHCR
+              └────────┬─────────┘
+                       │ (push to main only)
+              ┌────────▼─────────┐
+              │     deploy       │  AWS OIDC → SSM → `kubectl set image`
+              └──────────────────┘
+```
+
+Gates (NFR-4, NFR-5, NFR-9):
+
+- `golangci-lint run` — style + bug rules from `.golangci.yml`
+- `go test ./... -race -cover`
+- `helm lint` × 3 (defaults + dev + prod) and `kubeconform -strict` on rendered manifests
+- `gitleaks` with repo-local config at `.gitleaks.toml`
+- `trivy image --severity CRITICAL,HIGH --exit-code 1 --ignore-unfixed`
+
+Auto-deploy on merge to `main`:
+
+1. OIDC assumes the `insider-one-devops-github-deploy` IAM role (no long-lived keys in the repo).
+2. `aws ssm send-command` runs `kubectl -n default set image deployment/app app=<image>:<sha>` on the EC2 host.
+3. `kubectl rollout status` blocks until the new ReplicaSet is healthy.
+
+Deploy strategy rationale is in [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md). Required GitHub Actions secrets: `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`. The IAM role is provisioned by `terraform/iam-oidc.tf` (see [`terraform/README.md`](./terraform/README.md)).
+
 ## Conventions
 
 - **Branching:** trunk-based. `main` is protected; work via feature branches and PRs.
