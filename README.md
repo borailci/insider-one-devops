@@ -75,7 +75,31 @@ Tests map 1:1 to acceptance criteria in `SPEC.md` (`AC-1` through `AC-9`, plus `
     └── PULL_REQUEST_TEMPLATE.md
 ```
 
-Subsequent days will add `charts/`, `.github/workflows/`, `terraform/`, `dashboards/`, `docs/adr/`, `RUNBOOK.md`, `SECURITY.md`.
+Subsequent days will add `.github/workflows/`, `terraform/`, `dashboards/`, `docs/adr/`, `RUNBOOK.md`, `SECURITY.md`.
+
+## Helm chart (Day 2)
+
+Hand-written chart at `charts/app/` rendering Deployment, Service (ClusterIP), Ingress, ConfigMap, and Secret (conditional). Two environment overlays:
+
+| File                  | replicas | resources (req/lim cpu/mem)   | host                       | LOG_LEVEL |
+|-----------------------|---------:|-------------------------------|----------------------------|-----------|
+| `values-dev.yaml`     | 1        | 25m/100m, 32Mi/64Mi           | `app.dev.local`            | debug     |
+| `values-prod.yaml`    | 2        | 100m/500m, 128Mi/256Mi        | `app.insider-one.example`  | info      |
+
+Probes target `/healthz`. Pod and container `securityContext` enforce `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, and drop all capabilities — matching the distroless `nonroot` UID 65532.
+
+Quick verification:
+
+```bash
+helm lint charts/app -f charts/app/values-prod.yaml
+helm template app charts/app -f charts/app/values-prod.yaml | kubeconform -strict
+```
+
+Install against a local cluster:
+
+```bash
+helm upgrade --install app charts/app -f charts/app/values-dev.yaml
+```
 
 ## Conventions
 

@@ -1,0 +1,21 @@
+# Prod overrides — two replicas, headroom, prod hostname.
+
+replicaCount: 2
+
+config:
+  LOG_LEVEL: info
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+ingress:
+  hosts:
+    - host: app.insider-one.example
+      paths:
+        - path: /
+          pathType: Prefix

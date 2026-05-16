@@ -1,0 +1,21 @@
+# Dev overrides — single replica, tight resources, dev hostname.
+
+replicaCount: 1
+
+config:
+  LOG_LEVEL: debug
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+ingress:
+  hosts:
+    - host: app.dev.local
+      paths:
+        - path: /
+          pathType: Prefix

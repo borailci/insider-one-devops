@@ -1,0 +1,76 @@
+# Defaults. Override via -f values-dev.yaml or -f values-prod.yaml.
+
+image:
+  repository: ghcr.io/borailci/insider-one-devops
+  tag: ""           # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+config:
+  # Non-secret env. Rendered into a ConfigMap.
+  LOG_LEVEL: info
+
+secrets:
+  # Secret env. Keys/values committed here are placeholders only — overridden by CI.
+  # Example: API_TOKEN: "changeme"
+  {}
+
+service:
+  type: ClusterIP
+  port: 80
+  containerPort: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: app.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 2
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 1
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
