@@ -1,3 +1,6 @@
+# PodDisruptionBudget — kubectl drain / cluster upgrade can't evict the last
+# replica. Pairs with HPA: prod runs ≥3, minAvailable: 1 keeps at least one
+# pod up during voluntary disruptions (e.g. node maintenance).
 {{- if .Values.podDisruptionBudget.enabled -}}
 apiVersion: policy/v1
 kind: PodDisruptionBudget

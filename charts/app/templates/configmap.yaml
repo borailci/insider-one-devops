@@ -1,3 +1,6 @@
+# ConfigMap — non-secret env vars (LOG_LEVEL, PORT, etc.) flattened from
+# values.config. Mounted into the container via envFrom. Its hash is
+# annotated on the Pod template so value edits trigger a rolling restart.
 apiVersion: v1
 kind: ConfigMap
 metadata:

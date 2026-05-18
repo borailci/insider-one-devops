@@ -1,3 +1,20 @@
+# CI pipeline — single workflow, 7 jobs.
+#
+# Topology (gates):
+#   lint, test, helm-validate, gitleaks  (parallel, all must pass)
+#         └──> build-scan-push           (Trivy CRITICAL/HIGH fail, cosign sign, SBOM attest, push GHCR)
+#                    ├──> integration-test  (kind cluster + helm install + helm test)
+#                    └──> deploy            (SSM Run-Command rolls new image onto live EC2)
+#
+# Permission notes:
+#   - id-token: write   → required for both AWS OIDC (deploy) and Sigstore (cosign keyless).
+#   - packages: write   → push to ghcr.io/${owner}/insider-one-devops.
+#   - security-events: write → upload Trivy SARIF to the GitHub Security tab.
+#
+# Triggers:
+#   - push to main: full pipeline including deploy.
+#   - PR: everything except deploy (the deploy job preflights on EC2_INSTANCE_ID secret).
+#   - workflow_dispatch: manual runs (re-publish after rotating a secret etc.).
 name: ci
 
 on:
@@ -20,6 +37,8 @@ env:
   AWS_REGION: eu-north-1
 
 jobs:
+  # Static analysis: govet, staticcheck, errcheck, gosec via golangci-lint.
+  # Fast (~30s); first gate so cheap-to-fix issues land on PR feedback quickly.
   lint:
     name: lint (golangci-lint)
     runs-on: ubuntu-latest
@@ -35,6 +54,8 @@ jobs:
           version: v1.62.0
           args: --timeout=5m
 
+  # Unit tests with the race detector + coverage. -count=1 disables Go's test
+  # result cache so cached-passes can't sneak through.
   test:
     name: test (race + cover)
     runs-on: ubuntu-latest
@@ -47,6 +68,12 @@ jobs:
           cache: true
       - run: go test ./... -race -cover -count=1
 
+  # Chart hygiene:
+  #   - helm lint   : YAML well-formedness, semver, schema-ish checks.
+  #   - kubeconform : renders prod values + validates each manifest against
+  #     k8s 1.30 OpenAPI schemas. Catches bad fields BEFORE they hit a cluster.
+  #     CRD-backed kinds (ServiceMonitor, PrometheusRule) are skipped — no
+  #     schema available without the kube-prometheus-stack install.
   helm-validate:
     name: helm lint + kubeconform
     runs-on: ubuntu-latest
@@ -68,6 +95,9 @@ jobs:
             | kubeconform -strict -summary -kubernetes-version 1.30.0 \
                 -skip ServiceMonitor,PrometheusRule
 
+  # gitleaks — scans full history (fetch-depth: 0). Custom rule
+  # `lone-token-in-env-file` is in .gitleaks.toml; catches bare tokens
+  # in .env files even when default rules miss them.
   gitleaks:
     name: gitleaks (secret scan)
     runs-on: ubuntu-latest
@@ -81,6 +111,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
 
+  # Image pipeline — only runs after all 4 gates above pass.
+  # Steps inside:
+  #   1. setup-buildx (multi-arch via QEMU)
+  #   2. login to ghcr.io with GITHUB_TOKEN
+  #   3. buildx build --platform=linux/amd64,linux/arm64 (no push yet)
+  #   4. Trivy scan — fails build on CRITICAL/HIGH. SARIF uploaded to Security tab.
+  #   5. Push to GHCR (tags: short SHA + latest)
+  #   6. cosign sign — keyless, uses GitHub OIDC; signature stored as .sig tag.
+  #   7. syft → CycloneDX SBOM → cosign attest --type cyclonedx; .att tag in GHCR.
+  #   8. Output the SHA for downstream jobs (deploy/integration use it as image tag).
   build-scan-push:
     name: build + Trivy + cosign + SBOM + push (GHCR)
     needs: [lint, test, helm-validate, gitleaks]
@@ -214,6 +254,13 @@ jobs:
       sha: ${{ steps.meta.outputs.sha }}
       digest: ${{ steps.build-push.outputs.digest }}
 
+  # Integration — spins up a kind cluster, loads the freshly-built image,
+  # installs the chart with dev values, port-forwards, smoke-tests /ping
+  # + /healthz, runs `helm test` (bundled chart tests). Catches chart-level
+  # regressions before the deploy job rolls them to the live cluster.
+  # Kyverno is NOT installed here — the live EC2 has it. Difference between
+  # kind and live can mask issues; manual `helm test app` on EC2 is the
+  # belt-and-braces verification.
   integration-test:
     name: integration test (kind + helm install + helm test)
     needs: [build-scan-push]
@@ -274,6 +321,20 @@ jobs:
       - name: helm test (chart-bundled tests)
         run: helm test app --logs
 
+  # Deploy — pushes the new image to the live minikube cluster on EC2.
+  #
+  # Why SSM, not ssh:
+  #   - No SSH key in the repo → no key to rotate / leak.
+  #   - SG can keep port 22 closed to the world (operator-CIDR only).
+  #   - All commands are audited in CloudTrail under the OIDC-assumed role.
+  #
+  # Preflight gate: skips deploy if AWS_DEPLOY_ROLE_ARN or EC2_INSTANCE_ID
+  # secrets aren't set (e.g. fork PRs, post-teardown). Keeps the workflow green
+  # when the live stack is intentionally down.
+  #
+  # Roll command:
+  #   - sudo -iu ec2-user  : AL2023 default user (NOT ubuntu).
+  #   - deployment/app-app : Helm fullname = "<release>-<chart>" = "app-app".
   deploy:
     name: deploy (minikube on EC2 via SSM)
     needs: [build-scan-push, integration-test]

@@ -1,3 +1,8 @@
+# PrometheusRule — two alerts that meet the case-study "≥1 alert rule" bar:
+#   - AppDown      : no pods reporting up=1 (probe failure cascade)
+#   - HighErrorRate: 5xx ratio > threshold over 5m
+# Alertmanager (installed by kube-prometheus-stack) routes these. Adjust
+# thresholds in values, not here.
 {{- if .Values.prometheusRule.enabled -}}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule

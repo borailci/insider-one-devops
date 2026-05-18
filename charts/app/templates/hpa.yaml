@@ -1,3 +1,6 @@
+# HorizontalPodAutoscaler — scales the Deployment between min/maxReplicas
+# based on average CPU utilization. Requires metrics-server (minikube addon).
+# Deployment.replicas is suppressed when this is enabled so HPA owns the count.
 {{- if .Values.autoscaling.enabled -}}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

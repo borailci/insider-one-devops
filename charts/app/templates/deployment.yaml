@@ -1,3 +1,10 @@
+# Deployment — runs N replicas of the app container.
+# Two non-obvious bits:
+#   1. `checksum/config` annotation hashes the rendered ConfigMap; any value
+#      change forces a rolling restart even though the Deployment spec is
+#      otherwise unchanged (no need to manually bounce pods on config edit).
+#   2. `replicas:` is only emitted when HPA is disabled — otherwise HPA owns
+#      it and Helm fighting HPA causes a thrash loop.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

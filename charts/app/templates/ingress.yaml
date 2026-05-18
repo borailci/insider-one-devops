@@ -1,3 +1,7 @@
+# Ingress — wholly conditional. Dev uses a fake `dev.app.local` host; prod
+# emits a catch-all (no host:) so the EIP demo works without a real domain.
+# Switching tracks (cloudflared, custom domain) only touches values, not this
+# template.
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
