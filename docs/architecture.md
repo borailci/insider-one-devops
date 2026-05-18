@@ -100,7 +100,7 @@ Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Same content as 
    │   │ deploy       │    └─────────┬─────────┘  │                         │
    │   └──────────────┘              │            │                         │
    │                                 ▼            │                         │
-   │   ┌────────── EC2 t3.micro (AL2023) ──────┐  │                         │
+   │   ┌────────── EC2 t3.medium (AL2023) ─────┐  │                         │
    │   │                                       │  │                         │
    │   │   ┌───────────────────────────────┐   │  │                         │
    │   │   │           minikube            │   │  │                         │
@@ -125,8 +125,8 @@ Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Same content as 
    │   │   │                               │   │  │                         │
    │   │   │   ┌─── ns: monitoring ────┐   │   │  │                         │
    │   │   │   │  kube-prometheus-     │   │   │  │                         │
-   │   │   │   │  stack (best effort   │   │   │  │                         │
-   │   │   │   │  on t3.micro)         │   │   │  │                         │
+   │   │   │   │  stack (full on       │   │   │  │                         │
+   │   │   │   │  t3.medium default)   │   │   │  │                         │
    │   │   │   │  • Prometheus         │   │   │  │                         │
    │   │   │   │  • Grafana            │   │   │  │                         │
    │   │   │   │  • Alertmanager       │   │   │  │                         │
@@ -171,7 +171,7 @@ Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Same content as 
 ## Data flow on a normal request
 
 1. Client `curl http://<EIP>/ping -H 'Host: app.insider-one.example'`.
-2. iptables PREROUTING DNATs `<EIP>:80` → minikube IP `:80` (set up by bootstrap).
+2. A socat systemd unit on the host (set up by `scripts/bootstrap-ec2.sh`) accepts TCP on `0.0.0.0:80` and forwards to the minikube IP on port 80. (Replaces the earlier iptables PREROUTING DNAT, which was fragile on AL2023.)
 3. `ingress-nginx` matches the host header and forwards to Service `app-app:80`.
 4. Service routes to a pod IP on port 8080.
 5. Go handler logs an access-log line (JSON), increments `http_requests_total{path="/ping",status="200"}`, returns `pong`.

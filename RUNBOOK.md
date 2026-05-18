@@ -57,7 +57,7 @@ kubectl -n ingress-nginx get pods
 
 **Most common causes (in order):**
 
-1. **Pod OOM-killed.** `kubectl -n default get pods` shows `OOMKilled`. → resize `resources.limits` in `values-prod.yaml` and `helm upgrade`. On `t3.micro` this is expected if the obs stack is also scheduled — see [§ Observability fallback](#observability-fallback).
+1. **Pod OOM-killed.** `kubectl -n default get pods` shows `OOMKilled`. → resize `resources.limits` in `values-prod.yaml` and `helm upgrade`. Expected on smaller-than-default instances if the obs stack is also scheduled — see [§ Observability fallback](#observability-fallback).
 2. **Image pull failure.** `ImagePullBackOff`. → check `kubectl describe pod` for the GHCR error. If the package is private, ensure GHCR allows public read; otherwise create an `imagePullSecret`.
 3. **Ingress controller crashed.** `kubectl -n ingress-nginx logs deployment/ingress-nginx-controller` will show why. Restart with `kubectl -n ingress-nginx rollout restart deployment/ingress-nginx-controller`.
 
@@ -187,9 +187,9 @@ curl -sS http://localhost:9090/api/v1/alerts | jq '.data.alerts[] | {name: .labe
 
 ---
 
-## 8. Observability fallback (t3.micro OOM path)
+## 8. Observability fallback (smaller-instance path)
 
-`kube-prometheus-stack` requests ~250 MiB of RAM at the resource-trimmed settings in `scripts/bootstrap-ec2.sh`. On a `t3.micro` (1 GiB total, ~700 MiB usable after the kernel + Docker + minikube control plane) this is on the edge. If pods in `monitoring` stay `Pending` with `Insufficient memory`:
+The default `t3.medium` (4 GiB) comfortably fits minikube + ingress + kube-prometheus-stack + Kyverno + app. If you override `var.instance_type` to `t3.small` (2 GiB) or `t3.micro` (1 GiB) the obs stack will OOM or stay `Pending` with `Insufficient memory` — at the resource-trimmed bootstrap settings kube-prom-stack alone needs ~250 MiB requests, before you add Grafana sidecars and minikube overhead. Three recovery options:
 
 ```sh
 # Verify cause:
@@ -202,8 +202,8 @@ kubectl -n monitoring describe pod <pending-pod> | grep -A2 Events
 helm install kps prometheus-community/kube-prometheus-stack -n monitoring --create-namespace
 helm install app charts/app -f charts/app/values-prod.yaml --set serviceMonitor.enabled=true,prometheusRule.enabled=true
 
-# Option 2 — upgrade EC2 to t3.small:
-#   In terraform.tfvars: instance_type = "t3.small"
+# Option 2 — upgrade EC2 back to the default size:
+#   In terraform.tfvars: instance_type = "t3.medium"  (or t3.large for more headroom)
 #   terraform apply  (resource will be replaced — ~5 min downtime, EIP keeps its address)
 
 # Option 3 — uninstall the obs stack from EC2 to free memory:
@@ -211,7 +211,7 @@ helm -n monitoring uninstall kps
 kubectl delete namespace monitoring
 ```
 
-This trade-off is documented in [ADR-0001 § Consequences](docs/adr/0001-track.md) and accepted under NFR-10 (free-tier cost ceiling).
+This trade-off is documented in [ADR-0001 § Status update](docs/adr/0001-track.md) — `t3.medium` is the live default; the smaller-instance path is preserved for free-tier reviewers.
 
 ---
 
@@ -239,14 +239,14 @@ ssh ec2-user@<ip> 'cloud-init status --wait'
 # 2. minikube should auto-start; if not:
 ssh ec2-user@<ip> 'minikube start'
 
-# 3. Re-apply iptables NAT (cleared on reboot if not persisted):
-ssh ec2-user@<ip> 'sudo systemctl restart iptables'
+# 3. Restart the host→minikube socat proxies (enabled at boot by bootstrap):
+ssh ec2-user@<ip> 'sudo systemctl restart minikube-proxy-80.service minikube-proxy-443.service'
 
 # 4. Verify:
-curl -sS -H 'Host: app.insider-one.example' http://<ip>/ping
+curl -sS http://<ip>/ping
 ```
 
-If `/var/log/cloud-init-output.log` shows the bootstrap script ran cleanly twice (or marked complete), persisting the iptables rules via `systemctl enable iptables` (already done in bootstrap) is sufficient.
+The socat units are `systemctl enable`d by the bootstrap, so they come back automatically after reboot. Step 3 is only needed if `minikube` itself moved IP (rare) — `MINIKUBE_IP=$(minikube ip)` then re-edit the unit ExecStart.
 
 ---
 

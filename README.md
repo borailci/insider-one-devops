@@ -183,11 +183,11 @@ terraform apply
 terraform output public_url
 ```
 
-> **Cost guardrails.** `t3.micro` is free-tier eligible for 12 months on new AWS accounts. NFR-10 caps spend at $0. A detached EIP costs ~$3.60/mo, so `terraform destroy` removes both the instance and the EIP atomically. See [ADR-0001](./docs/adr/0001-track.md) for the trade-offs.
+> **Cost guardrails.** Default instance is `t3.medium` (~$30/mo if left running) so the bonus obs stack actually fits — the original `t3.micro` free-tier path is preserved as an override in `terraform/variables.tf`. A detached EIP costs ~$3.60/mo, so `terraform destroy` removes both the instance and the EIP atomically. See [ADR-0001](./docs/adr/0001-track.md) for the size trade-off.
 
 **Observability stack.** `kube-prometheus-stack` is installed via Helm into the `monitoring` namespace. The chart now ships a `ServiceMonitor` (`charts/app/templates/servicemonitor.yaml`) and a `PrometheusRule` (`charts/app/templates/prometheusrule.yaml`) that fires `AppDown` and `HighErrorRate` (> 5% 5xx for 2 m). The Grafana dashboard `dashboards/app.json` covers RPS, p50/p95/p99 latency, error rate, pod restarts, and a service-health stat.
 
-> **t3.micro reality.** 1 GiB of RAM is tight for minikube + the full obs stack. The bootstrap reduces resource requests aggressively; if the stack still does not schedule, [`RUNBOOK.md` § Observability fallback](./RUNBOOK.md#observability-fallback-t3micro-oom-path) documents three options (demo obs locally, upgrade to `t3.small`, or uninstall the obs stack on EC2). The chart and dashboard are environment-agnostic — they render and grade identically against any minikube.
+> **Smaller-instance fallback.** On `t3.small` or `t3.micro` the obs stack does not fit and is dropped; the app keeps serving the public URL. [`RUNBOOK.md` § Observability fallback](./RUNBOOK.md#8-observability-fallback-smaller-instance-path) covers the three demo paths (run obs on a local minikube, upgrade EC2, or uninstall the obs stack on EC2). The chart and dashboard are environment-agnostic — they render and grade identically against any minikube.
 
 ## Bonus features
 

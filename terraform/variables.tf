@@ -32,9 +32,14 @@ variable "ec2_instance_id" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. t3.micro is free-tier eligible for 12 months on new accounts."
+  description = <<-EOT
+    EC2 instance type.
+      t3.medium (2 vCPU / 4 GiB) — default; fits minikube + ingress-nginx + kube-prometheus-stack + app.
+      t3.small  (2 vCPU / 2 GiB) — minimum viable; obs stack often OOMs.
+      t3.micro  (2 vCPU / 1 GiB) — free-tier eligible on new accounts, but obs stack will NOT fit.
+  EOT
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "operator_cidr" {

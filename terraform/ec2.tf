@@ -1,5 +1,7 @@
 # Day 4 — EC2 minikube host + Elastic IP + Security Group.
-# Free-tier target: t3.micro on Amazon Linux 2023. SSM agent ships pre-installed.
+# Default size: t3.medium on Amazon Linux 2023 — fits minikube + ingress-nginx +
+# kube-prometheus-stack + Kyverno + app. Override via var.instance_type for free-tier
+# (t3.micro) at the cost of dropping the obs stack. SSM agent ships pre-installed.
 # Resources are tagged `Project = var.project_tag` for AC-26 and AC-29.
 
 data "aws_vpc" "default" {

@@ -6,15 +6,16 @@
 # Target OS: Amazon Linux 2023 (x86_64). SSM agent ships pre-installed.
 # Output goes to /var/log/cloud-init-output.log on first run.
 #
-# Honest scope on a t3.micro (1 GiB RAM):
+# Default-sized run (t3.medium, 4 GiB):
 #   - Installs docker + minikube + kubectl + helm.
-#   - Starts minikube with --memory=900 --cpus=2 so kubelet fits in available RAM.
-#   - Enables the ingress addon.
-#   - Installs the app chart with values-prod.yaml.
-#   - Attempts kube-prometheus-stack with reduced resource requests.
-#     If the stack fails to schedule, the app keeps serving traffic and
-#     RUNBOOK.md (Observability fallback) documents running the obs stack on
-#     a local minikube for demo screenshots.
+#   - Starts minikube with --memory=3000 --cpus=2 (leaves ~1 GiB for OS + Docker).
+#   - Enables the ingress addon and a socat host→cluster TCP proxy on 80/443.
+#   - Installs Kyverno → policies → kube-prometheus-stack → app, in that order
+#     (Kyverno first so ClusterPolicies admit everything downstream).
+#
+# Smaller instances (t3.small / t3.micro) skip kube-prometheus-stack — the app
+# keeps serving traffic but the obs stack does not schedule. See
+# RUNBOOK.md § Observability fallback for the demo-locally alternative.
 
 set -euo pipefail
 
@@ -71,11 +72,12 @@ sudo -u ec2-user git clone --depth=1 "https://github.com/${REPO_OWNER}/${REPO_NA
 APP_IMAGE_TAG=$(sudo -iu ec2-user bash -c "cd ${REPO_ROOT} && git rev-parse --short HEAD")
 log "app image tag = ${APP_IMAGE_TAG}"
 
-# --- 4. Start minikube (constrained for t3.micro) -------------------------
+# --- 4. Start minikube -----------------------------------------------------
 
 log "starting minikube"
-# --memory tuned for t3.medium (4 GiB total, ~3.5 GiB usable). On t3.small drop to 1500.
-# On t3.micro (1 GiB) the obs stack does not fit; that path is documented in RUNBOOK §Observability fallback.
+# --memory tuned for t3.medium (4 GiB total, ~3.5 GiB usable after kernel + docker).
+# Drop to --memory=1500 for t3.small (obs stack will be tight) or skip kps on t3.micro.
+# See RUNBOOK § Observability fallback for the smaller-instance demo path.
 sudo -iu ec2-user bash -c "minikube start \
     --driver=docker \
     --memory=3000 \
