@@ -20,13 +20,17 @@ set -euo pipefail
 
 REPO_OWNER="borailci"
 REPO_NAME="insider-one-devops"
-CHART_DIR="/home/ec2-user/${REPO_NAME}/charts/app"
+REPO_ROOT="/home/ec2-user/${REPO_NAME}"
+CHART_DIR="${REPO_ROOT}/charts/app"
+POLICIES_CHART_DIR="${REPO_ROOT}/charts/policies"
 RELEASE_NAME="app"
 NAMESPACE="default"
 MONITORING_NAMESPACE="monitoring"
+KYVERNO_NAMESPACE="kyverno"
 HELM_VERSION="v3.16.2"
 MINIKUBE_VERSION="latest"
 KUBECTL_VERSION="v1.30.0"
+KYVERNO_CHART_VERSION="3.2.6"
 
 log() { printf '[bootstrap] %s\n' "$*"; }
 
@@ -59,7 +63,13 @@ rm -rf /tmp/linux-amd64
 # --- 3. Clone repo so the chart is available on disk ----------------------
 
 log "cloning chart source"
-sudo -u ec2-user git clone --depth=1 "https://github.com/${REPO_OWNER}/${REPO_NAME}.git" "/home/ec2-user/${REPO_NAME}" || true
+sudo -u ec2-user git clone --depth=1 "https://github.com/${REPO_OWNER}/${REPO_NAME}.git" "${REPO_ROOT}" || true
+
+# Derive image tag from the cloned commit. Kyverno's disallow-latest-tag policy
+# rejects :latest, so we pin to the short SHA. CI publishes this tag on every
+# push to main.
+APP_IMAGE_TAG=$(sudo -iu ec2-user bash -c "cd ${REPO_ROOT} && git rev-parse --short HEAD")
+log "app image tag = ${APP_IMAGE_TAG}"
 
 # --- 4. Start minikube (constrained for t3.micro) -------------------------
 
@@ -124,7 +134,34 @@ systemctl daemon-reload
 systemctl enable --now minikube-ingress-80.service
 systemctl enable --now minikube-ingress-443.service
 
-# --- 5. Observability (must precede app) ----------------------------------
+# --- 5. Kyverno + cluster policies ----------------------------------------
+# Kyverno must be Ready before any other workload is admitted, so that the
+# cluster policies (no :latest, must run as non-root, must have resources)
+# apply to everything from the start. System namespaces are excluded in the
+# policies chart so the platform itself isn't blocked.
+
+log "adding kyverno helm repo"
+sudo -iu ec2-user bash -c "helm repo add kyverno https://kyverno.github.io/kyverno/ && helm repo update"
+
+log "installing kyverno chart version ${KYVERNO_CHART_VERSION}"
+sudo -iu ec2-user bash -c "helm upgrade --install kyverno kyverno/kyverno \
+    --namespace ${KYVERNO_NAMESPACE} \
+    --create-namespace \
+    --version ${KYVERNO_CHART_VERSION} \
+    --wait --timeout 5m" \
+  || log "WARN: kyverno install did not finish in 5m"
+
+log "waiting for kyverno admission webhook"
+sudo -iu ec2-user bash -c "kubectl -n ${KYVERNO_NAMESPACE} wait --for=condition=available deploy --all --timeout=120s" \
+  || log "WARN: not all kyverno deployments became Available"
+
+log "applying cluster policies"
+sudo -iu ec2-user bash -c "helm upgrade --install policies ${POLICIES_CHART_DIR} \
+    --namespace ${KYVERNO_NAMESPACE} \
+    --wait --timeout 2m" \
+  || log "WARN: policies chart install failed"
+
+# --- 6. Observability (must precede app) ----------------------------------
 # Order matters: the app chart's prod values reference ServiceMonitor and
 # PrometheusRule CRDs that the kube-prometheus-stack install provides. If we
 # install the app first, helm fails with "no matches for kind PrometheusRule".
@@ -148,14 +185,14 @@ for crd in servicemonitors.monitoring.coreos.com prometheusrules.monitoring.core
     || log "WARN: CRD ${crd} not Established — app install may fail on prod values"
 done
 
-# --- 6. App chart ----------------------------------------------------------
+# --- 7. App chart ----------------------------------------------------------
 
-log "installing app via helm"
+log "installing app via helm (image tag ${APP_IMAGE_TAG})"
 sudo -iu ec2-user bash -c "helm upgrade --install ${RELEASE_NAME} ${CHART_DIR} \
     --namespace ${NAMESPACE} \
     --create-namespace \
     -f ${CHART_DIR}/values-prod.yaml \
-    --set image.tag=latest \
+    --set image.tag=${APP_IMAGE_TAG} \
     --wait --timeout 3m" || log "WARN: initial helm install failed; CI deploy job will retry"
 
 log "verifying app reachable via socat proxy on localhost:80"

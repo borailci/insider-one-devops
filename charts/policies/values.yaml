@@ -1,0 +1,23 @@
+# Set to "Audit" to dry-run policies (admission allowed, violations logged
+# as PolicyReport). "Enforce" rejects non-compliant pods at admission.
+validationFailureAction: Enforce
+
+# Namespaces that bypass every policy in this chart. Required so the
+# platform (kube-system kubelets, kyverno itself, the observability stack)
+# can run without policy denial.
+excludedNamespaces:
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - kyverno
+  - monitoring
+  - ingress-nginx
+  - local-path-storage
+
+policies:
+  requireNonRoot:
+    enabled: true
+  disallowLatestTag:
+    enabled: true
+  requireResources:
+    enabled: true

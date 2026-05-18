@@ -1,0 +1,43 @@
+{{- if .Values.policies.requireResources.enabled -}}
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resources
+  annotations:
+    policies.kyverno.io/title: Require CPU + memory requests and limits
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: |
+      Every container must declare both requests and limits for CPU and
+      memory. Missing values mean the scheduler can't make capacity
+      decisions and the kubelet can't enforce QoS guarantees.
+spec:
+  validationFailureAction: {{ .Values.validationFailureAction }}
+  background: true
+  rules:
+    - name: containers-must-declare-resources
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                {{- range .Values.excludedNamespaces }}
+                - {{ . | quote }}
+                {{- end }}
+      validate:
+        message: "Containers must declare resources.requests.{cpu,memory} and resources.limits.{cpu,memory}."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
+{{- end }}

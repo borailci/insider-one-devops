@@ -1,0 +1,56 @@
+{{- if .Values.policies.disallowLatestTag.enabled -}}
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow :latest and untagged images
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: |
+      Container images must use an explicit, immutable tag. The :latest tag
+      (or an untagged reference, which defaults to :latest) is rejected
+      because it breaks reproducibility and prevents reliable rollback.
+spec:
+  validationFailureAction: {{ .Values.validationFailureAction }}
+  background: true
+  rules:
+    - name: image-tag-must-not-be-latest
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                {{- range .Values.excludedNamespaces }}
+                - {{ . | quote }}
+                {{- end }}
+      validate:
+        message: "Container images must declare an explicit tag other than :latest."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+    - name: image-tag-must-be-explicit
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                {{- range .Values.excludedNamespaces }}
+                - {{ . | quote }}
+                {{- end }}
+      validate:
+        message: "Container images must be tagged (image:<tag>) — untagged images default to :latest."
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"
+{{- end }}

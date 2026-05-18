@@ -1,0 +1,15 @@
+apiVersion: v2
+name: policies
+description: |
+  Cluster-wide Kyverno policies for the insider-one-devops case study.
+  Three rules: pods must run as non-root, images cannot use :latest or be
+  untagged, and containers must declare both CPU + memory requests/limits.
+  System namespaces are excluded so the platform (kube-system, kyverno,
+  monitoring, ingress-nginx) can boot without policy blocks.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - kyverno
+  - policy
+  - security

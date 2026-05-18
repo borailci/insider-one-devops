@@ -247,3 +247,49 @@ curl -sS -H 'Host: app.insider-one.example' http://<ip>/ping
 ```
 
 If `/var/log/cloud-init-output.log` shows the bootstrap script ran cleanly twice (or marked complete), persisting the iptables rules via `systemctl enable iptables` (already done in bootstrap) is sufficient.
+
+---
+
+## 11. Demoing the Kyverno policies
+
+The cluster ships three cluster-wide Kyverno policies via the `charts/policies` chart: `require-non-root`, `disallow-latest-tag`, and `require-resources`. They run in **Enforce** mode and exclude system namespaces (`kube-system`, `kyverno`, `monitoring`, `ingress-nginx`, …) so the platform itself isn't blocked.
+
+A reviewer can confirm policies are live and rejecting bad workloads in three commands:
+
+```sh
+# 1. Confirm the policies are installed and Ready.
+kubectl get clusterpolicies
+# Expected:
+#   NAME                  READY   AGE
+#   require-non-root      True    2m
+#   disallow-latest-tag   True    2m
+#   require-resources     True    2m
+
+# 2. Try to create a pod that violates require-non-root + disallow-latest-tag
+#    + require-resources, all at once. Should be REJECTED at admission.
+kubectl run nginx-bad --image=nginx:latest --restart=Never
+# Expected error message (truncated):
+#   Error from server: admission webhook "validate.kyverno.svc-fail" denied
+#   the request: policy disallow-latest-tag/image-tag-must-not-be-latest fail:
+#   Container images must declare an explicit tag other than :latest.
+
+# 3. Inspect the produced PolicyReports for the audit trail.
+kubectl get policyreports -A
+```
+
+The case-study app itself passes because:
+
+- its `securityContext` sets `runAsNonRoot: true` (`charts/app/values.yaml`),
+- bootstrap installs the app with `image.tag=<short-sha>`, never `:latest`,
+- `values.yaml` declares both CPU and memory `requests` + `limits`.
+
+If a policy is unexpectedly blocking a legitimate workload, flip it to audit mode without uninstalling:
+
+```sh
+kubectl patch clusterpolicy disallow-latest-tag \
+  --type=merge -p '{"spec":{"validationFailureAction":"Audit"}}'
+```
+
+To re-enforce: replace `Audit` with `Enforce`, or `helm upgrade --install policies charts/policies -n kyverno` to restore the values-file defaults.
+
+Reference: [`charts/policies/`](./charts/policies/), [SECURITY.md §8 (STRIDE — Elevation of Privilege)](./SECURITY.md#8-stride-decomposition).

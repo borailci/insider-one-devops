@@ -1,0 +1,44 @@
+{{- if .Values.policies.requireNonRoot.enabled -}}
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root
+  annotations:
+    policies.kyverno.io/title: Require non-root pods
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: |
+      Every Pod must set runAsNonRoot=true at either the pod or container
+      securityContext, and must not run as UID 0. System namespaces are
+      excluded so platform components are not blocked.
+spec:
+  validationFailureAction: {{ .Values.validationFailureAction }}
+  background: true
+  rules:
+    - name: pod-must-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                {{- range .Values.excludedNamespaces }}
+                - {{ . | quote }}
+                {{- end }}
+      validate:
+        message: "Pods must run as non-root (runAsNonRoot=true and runAsUser != 0)."
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+              =(containers):
+                - =(securityContext):
+                    =(runAsNonRoot): true
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
+{{- end }}
