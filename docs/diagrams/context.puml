@@ -1,0 +1,26 @@
+@startuml context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.10.0/C4_Context.puml
+
+title C4 Level 1 — insider-one-devops · System Context
+
+LAYOUT_TOP_DOWN()
+
+Person(user, "End user / reviewer", "Hits the public demo URL with curl or a browser.")
+Person(developer, "Developer", "Author of the service. Pushes to main; never deploys by hand.")
+
+System_Boundary(s, "insider-one-devops case study") {
+  System(app, "Go HTTP service", "Three endpoints (/ping /healthz /version) + /metrics. Stateless. Runs on minikube on EC2.")
+}
+
+System_Ext(github, "GitHub", "Source of truth. Hosts code, OIDC issuer, Actions runner, releases.")
+System_Ext(ghcr, "GHCR", "OCI registry. Stores signed multi-arch images + SBOM attachments.")
+System_Ext(aws, "AWS (eu-north-1)", "EC2 + EIP + IAM. Single-tenant. No long-lived credentials.")
+
+Rel(developer, github, "git push", "HTTPS")
+Rel(github, ghcr, "Push signed image + SBOM", "OCI / OIDC")
+Rel(github, aws, "Assume role via OIDC, run kubectl set image via SSM", "STS / SSM")
+Rel(aws, ghcr, "Pull image on bootstrap and on rollout", "OCI (unauthenticated, public)")
+Rel(user, app, "GET /ping, /healthz, /version", "HTTP/80 over EIP")
+
+SHOW_LEGEND()
+@enduml

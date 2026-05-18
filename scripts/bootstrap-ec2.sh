@@ -75,27 +75,59 @@ sudo -iu ec2-user bash -c "minikube start \
 log "enabling ingress addon"
 sudo -iu ec2-user bash -c "minikube addons enable ingress"
 
-# Route 80/443 from host → minikube IP (Docker driver does not auto-bind).
+log "waiting for ingress-nginx controller Ready"
+sudo -iu ec2-user bash -c "kubectl wait --namespace ingress-nginx \
+    --for=condition=ready pod \
+    --selector=app.kubernetes.io/component=controller \
+    --timeout=180s" || log "WARN: ingress controller not Ready in 180s"
+
+# Route host 80/443 → minikube IP via socat (userspace, no kernel forwarding).
+# iptables DNAT to docker-bridge IP is fragile on AL2023; socat avoids ip_forward,
+# FORWARD chain, nftables/iptables-services conflicts, and reboot persistence quirks.
 MINIKUBE_IP=$(sudo -iu ec2-user bash -c "minikube ip")
-log "forwarding host 80 → ${MINIKUBE_IP}:80"
-dnf -y install iptables-services
-systemctl enable --now iptables
-iptables -t nat -A PREROUTING -p tcp --dport 80  -j DNAT --to-destination "${MINIKUBE_IP}:80"
-iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination "${MINIKUBE_IP}:443"
-iptables -t nat -A POSTROUTING -j MASQUERADE
-iptables-save > /etc/sysconfig/iptables
+log "installing socat for host→minikube TCP proxy (target ${MINIKUBE_IP})"
+dnf -y install socat
 
-# --- 5. Install the app chart ---------------------------------------------
+cat >/etc/systemd/system/minikube-ingress-80.service <<EOF
+[Unit]
+Description=socat proxy 0.0.0.0:80 -> minikube ingress
+After=network-online.target
+Wants=network-online.target
 
-log "installing app via helm"
-sudo -iu ec2-user bash -c "helm upgrade --install ${RELEASE_NAME} ${CHART_DIR} \
-    --namespace ${NAMESPACE} \
-    --create-namespace \
-    -f ${CHART_DIR}/values-prod.yaml \
-    --set image.tag=latest \
-    --wait --timeout 3m" || log "WARN: initial helm install failed; CI deploy job will retry"
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat -d -d TCP-LISTEN:80,reuseaddr,fork TCP:${MINIKUBE_IP}:80
+Restart=always
+RestartSec=2
 
-# --- 6. Observability (best-effort on free tier) --------------------------
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/minikube-ingress-443.service <<EOF
+[Unit]
+Description=socat proxy 0.0.0.0:443 -> minikube ingress
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat -d -d TCP-LISTEN:443,reuseaddr,fork TCP:${MINIKUBE_IP}:443
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now minikube-ingress-80.service
+systemctl enable --now minikube-ingress-443.service
+
+# --- 5. Observability (must precede app) ----------------------------------
+# Order matters: the app chart's prod values reference ServiceMonitor and
+# PrometheusRule CRDs that the kube-prometheus-stack install provides. If we
+# install the app first, helm fails with "no matches for kind PrometheusRule".
 
 log "adding prometheus-community helm repo"
 sudo -iu ec2-user bash -c "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update"
@@ -110,4 +142,30 @@ sudo -iu ec2-user bash -c "helm upgrade --install kps prometheus-community/kube-
     --wait --timeout 8m" \
   || log "WARN: kube-prometheus-stack did not become Ready — see RUNBOOK §Observability fallback"
 
+log "waiting for ServiceMonitor + PrometheusRule CRDs to be Established"
+for crd in servicemonitors.monitoring.coreos.com prometheusrules.monitoring.coreos.com; do
+  sudo -iu ec2-user bash -c "kubectl wait --for=condition=Established crd/${crd} --timeout=120s" \
+    || log "WARN: CRD ${crd} not Established — app install may fail on prod values"
+done
+
+# --- 6. App chart ----------------------------------------------------------
+
+log "installing app via helm"
+sudo -iu ec2-user bash -c "helm upgrade --install ${RELEASE_NAME} ${CHART_DIR} \
+    --namespace ${NAMESPACE} \
+    --create-namespace \
+    -f ${CHART_DIR}/values-prod.yaml \
+    --set image.tag=latest \
+    --wait --timeout 3m" || log "WARN: initial helm install failed; CI deploy job will retry"
+
+log "verifying app reachable via socat proxy on localhost:80"
+for i in $(seq 1 30); do
+  if curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1/ping | grep -qE '^(200|404)$'; then
+    log "ingress reachable on localhost:80"
+    break
+  fi
+  sleep 5
+done
+
+touch /var/log/bootstrap-done
 log "bootstrap complete"

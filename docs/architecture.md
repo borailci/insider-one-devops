@@ -2,6 +2,31 @@
 
 The system is intentionally small: one stateless Go service, one Kubernetes cluster (minikube on EC2), one CI pipeline, one observability stack. Every box below traces to one or more requirements in [`SPEC.md`](../SPEC.md).
 
+## Diagrams (C4 model, PlantUML)
+
+Source `.puml` files live in [`docs/diagrams/`](diagrams/) and use the [C4-PlantUML](https://github.com/plantuml-stdlib/C4-PlantUML) macros. Run `make diagrams` to re-render — `make diagrams-check` runs in CI and fails when committed SVGs drift from source.
+
+### Level 1 — System context
+
+![System context](diagrams/context.svg)
+
+Source: [`diagrams/context.puml`](diagrams/context.puml). Shows the external actors (end user, developer) and the three external systems the case study integrates with (GitHub, GHCR, AWS).
+
+### Level 2 — Containers
+
+![Containers on minikube/EC2](diagrams/container.svg)
+
+Source: [`diagrams/container.puml`](diagrams/container.puml). Decomposes the case-study system into the components that actually run on the EC2 host: ingress-nginx, the Go service Deployment, kube-prometheus-stack, Kyverno, and the two socat systemd units bridging host ports 80/443 to the minikube IP.
+
+### Deployment / CI/CD
+
+![CI/CD pipeline](diagrams/deployment.svg)
+
+Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Walks a commit from `git push` through every pipeline stage (lint → test → gitleaks → helm-validate → build-scan-sign → kind integration → deploy) to a live cluster.
+
+<details>
+<summary>Click for the original ASCII topology (terminal-friendly view)</summary>
+
 ## Topology
 
 ```
@@ -74,6 +99,8 @@ The system is intentionally small: one stateless Go service, one Kubernetes clus
                                           end user
                                           (curl / browser)
 ```
+
+</details>
 
 ## Component map → requirements
 

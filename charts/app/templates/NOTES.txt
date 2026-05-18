@@ -1,0 +1,38 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} — release "{{ .Release.Name }}" in "{{ .Release.Namespace }}".
+
+Smoke test the install:
+
+  helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+Runs two pods that curl the app:
+  * /ping     -> must return "pong"
+  * /healthz  -> must return {"status":"ok"}
+  * /version  -> must return non-empty sha + build_time
+
+Local access (port-forward):
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "app.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/ping
+
+{{- if .Values.ingress.enabled }}
+
+Ingress is enabled. From inside the cluster the hostnames are:
+{{- range .Values.ingress.hosts }}
+  {{- if .host }}
+  * http://{{ .host }}/
+  {{- else }}
+  * http://<ingress-controller-IP>/    (catch-all — no Host header required)
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.autoscaling.enabled }}
+
+Autoscaling is on: {{ .Values.autoscaling.minReplicas }}–{{ .Values.autoscaling.maxReplicas }} replicas at {{ .Values.autoscaling.targetCPUUtilizationPercentage }}% CPU. Verify with:
+  kubectl get hpa {{ include "app.fullname" . }}
+{{- end }}
+
+{{- if .Values.serviceMonitor.enabled }}
+
+Prometheus ServiceMonitor is on. Confirm the target shows up in the kube-prometheus-stack Prometheus UI under Status → Targets.
+{{- end }}

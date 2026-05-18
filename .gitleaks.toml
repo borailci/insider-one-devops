@@ -7,7 +7,6 @@ useDefault = true
 [allowlist]
 description = "Repo-specific false-positive allowlist"
 paths = [
-  '''\.env\.example$''',
   '''^docs/adr/''',
   '''^SPEC\.md$''',
   '''^README\.md$''',
@@ -19,3 +18,12 @@ regexes = [
   '''example-?token''',
   '''dummy-?secret''',
 ]
+
+# Catches a token-shaped value sitting on its own line in any .env / .env.example
+# (no KEY= prefix, not a comment). Class of mistake hit on 2026-05-18 when a
+# Grafana admin password was pasted bare into .env.example.
+[[rules]]
+id = "lone-token-in-env-file"
+description = "Bare token-shaped value on its own line in an env file (missing KEY= prefix)"
+regex = '''(?m)^[A-Za-z0-9+/_-]{20,}={0,2}\s*$'''
+path = '''(^|/)\.env(\.[A-Za-z0-9_-]+)?$'''

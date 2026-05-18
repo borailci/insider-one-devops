@@ -1,0 +1,43 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # ingress-nginx controller in its own namespace (auto-labeled by k8s >= 1.21
+    # via NamespaceDefaultLabelName admission plugin). Fallback documented in
+    # RUNBOOK if the cluster doesn't apply the default label.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.containerPort }}
+  egress:
+    # DNS resolution (kube-dns lives in kube-system).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Stateless app — no other egress dependency. Leave outbound open so future
+    # additions (e.g. external API calls) don't silently break.
+    - {}
+{{- end }}

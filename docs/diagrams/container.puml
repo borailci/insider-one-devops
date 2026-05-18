@@ -1,0 +1,44 @@
+@startuml container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.10.0/C4_Container.puml
+
+title C4 Level 2 — insider-one-devops · Containers on minikube/EC2
+
+LAYOUT_TOP_DOWN()
+
+Person(user, "End user / reviewer")
+
+System_Boundary(ec2, "AWS EC2 t3.medium (Amazon Linux 2023)") {
+  System_Boundary(mk, "minikube (single-node Kubernetes)") {
+    Container(ingress, "ingress-nginx", "k8s addon", "Terminates :80 / :443 from the host. Routes by Host header (catch-all in prod).")
+    Container(app, "app Deployment", "Go 1.25 · distroless nonroot", "Two replicas with HPA 2..5 on CPU 60%. Endpoints /ping, /healthz, /version, /metrics.")
+
+    System_Boundary(monitor, "ns: monitoring") {
+      Container(prom, "Prometheus", "kube-prometheus-stack", "Scrapes /metrics every 30s via ServiceMonitor.")
+      Container(graf, "Grafana", "kube-prometheus-stack", "Dashboards + alert rules. Admin password rotated post-bootstrap.")
+      Container(am, "Alertmanager", "kube-prometheus-stack", "Receives PrometheusRule alerts. Slack wiring is bonus / out of scope.")
+    }
+
+    System_Boundary(policies, "ns: kyverno") {
+      Container(kyverno, "Kyverno", "admission webhook", "Enforces ClusterPolicies: no :latest, must run non-root, must set resources.")
+    }
+  }
+
+  Container(socat80, "socat :80", "systemd unit", "Userspace proxy host:80 → minikube:80. Replaces fragile iptables DNAT.")
+  Container(socat443, "socat :443", "systemd unit", "Same for HTTPS.")
+}
+
+System_Ext(eip, "AWS Elastic IP", "Stable public IPv4. Survives instance replacement.")
+System_Ext(ghcr, "GHCR", "Source of the signed image pulled on rollout.")
+
+Rel(user, eip, "TCP 80/443")
+Rel(eip, socat80, "DNAT to instance public IP")
+Rel(socat80, ingress, "TCP 80")
+Rel(ingress, app, "HTTP 8080 (ClusterIP)")
+Rel(prom, app, "GET /metrics every 30s")
+Rel(graf, prom, "PromQL")
+Rel(am, graf, "Alert state (visible in UI)")
+Rel(kyverno, app, "Admission control on pod creation", "validation")
+Rel(app, ghcr, "Image pulled on rollout", "OCI")
+
+SHOW_LEGEND()
+@enduml

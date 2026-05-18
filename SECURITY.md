@@ -8,7 +8,7 @@ Traceability: FR-32, AC-36, NFR-4, NFR-5, NFR-6.
 
 ## 1. Threat model summary
 
-The service has a small attack surface — three HTTP endpoints, no auth, no persistent storage, no user-supplied data beyond headers. The actual risk surface lives in the **delivery path**:
+The service has a small attack surface — three HTTP endpoints, no auth, no persistent storage, no user-supplied data beyond headers. The actual risk surface lives in the **delivery path**. The table below is an asset-centric view; §8 re-projects the same controls onto STRIDE for completeness.
 
 | Asset | Threat | Control |
 |---|---|---|
@@ -164,3 +164,26 @@ Expected response: an acknowledgement within 72 hours. As a case-study artifact 
 | EC2 has 22/tcp open from `var.operator_cidr` (defaults `0.0.0.0/0`) | Local-dev default | **Always** narrow to operator IP/32 in `terraform.tfvars` before `terraform apply` |
 | No WAF / rate limiting | Out of scope for case study | If demo traffic risks DoS during grading |
 | No image signing (cosign) / SBOM (syft) | Listed as bonus in case-study brief | If post-grading hardening is needed |
+
+---
+
+## 8. STRIDE decomposition
+
+The asset table in §1 is organized by what we're protecting. STRIDE re-projects the same controls onto the six threat categories Microsoft's framework defines, so a reviewer auditing under STRIDE can confirm coverage at a glance. Each row points at the file or commit that implements the control.
+
+| Category | Threat in this system | Control | Where it lives | Residual risk |
+|---|---|---|---|---|
+| **S**poofing — actor pretends to be someone they aren't | Malicious push to `main` from an attacker who stole a PAT | Branch protection requires PR + reviewer; CODEOWNERS gates the file; GitHub OIDC `sub` claim on the deploy role pins to this repo+ref, not a username | `.github/CODEOWNERS`; `terraform/iam-oidc.tf` (`github_ref_subjects`); GitHub branch-protection settings (external to repo) | A compromised repo admin can lift protections; mitigation = least-privilege admin set + 2FA on owner account |
+| **T**ampering — data altered in transit or at rest | Attacker swaps the image at the same tag in GHCR; tampered Helm chart pushed | Trivy scan blocks `CRITICAL/HIGH` before push; cosign keyless signing produces a verifiable Sigstore signature on the digest; `:<sha>` tag is the immutable audit anchor; planned: `cosign verify` step in CI gates deploy | `.github/workflows/ci.yml` (Trivy + cosign sign+verify); `Makefile` `sign-verify` target for reviewers; chart source under version control | Helm chart on disk is not signed (only the OCI image); reviewers must read the chart, not just trust it |
+| **R**epudiation — actor denies an action they took | Who pushed the image? Who deployed it? Who ran a kubectl command on the host? | GitHub Actions run logs (immutable, 90-day retention) record every workflow invocation, actor, and ref; AWS CloudTrail records every `AssumeRoleWithWebIdentity` + `ssm:SendCommand`; cosign signature carries the OIDC subject claim, so the signing identity is non-repudiable | GitHub repo → Actions tab; AWS CloudTrail (default trail); `cosign verify` output | CloudTrail retention default is 90 days; longer retention needs an S3 trail (out of scope for a case study) |
+| **I**nformation disclosure — sensitive data leaks | Secrets in repo; secrets in image; secrets in logs; long-lived AWS keys | `gitleaks` runs on every push + PR with a custom rule for "lone token in env file" (the 2026-05-18 incident class); `.env.example` carries placeholders only; image is distroless (no shell to leak from); logs include only request metadata, never bodies; AWS access is OIDC-only (no static keys) | `.gitleaks.toml` (rule `lone-token-in-env-file`); `.gitignore`; `main.go` middleware logs only `(method, path, status, duration_ms, request_id)`; `terraform/iam-oidc.tf` | Header values are logged on errors — no PII expected, but a Bearer token in `Authorization` would land in logs. Mitigation listed in §1 ("explicit redactor"); not implemented |
+| **D**enial of service — actor exhausts resources | A flood crashes the pod; a single bad request consumes all CPU; a noisy neighbor on minikube pushes the app off-node | Resource `requests`/`limits` per container (CPU + memory); liveness/readiness probes catch crash-loops; PodDisruptionBudget (`minAvailable: 1`) prevents node-drain from killing the last replica; HPA scales 2→5 on CPU; alert `error-rate > 5% for 2m` (PrometheusRule) pages early | `charts/app/values.yaml` (`resources`, `probes`); `charts/app/templates/{hpa,poddisruptionbudget}.yaml`; `charts/app/templates/prometheusrule.yaml` | No L7 WAF / rate-limit; the EIP is the obvious DoS target. See §1 "Out of scope" |
+| **E**levation of privilege — actor gains permissions beyond their grant | Container escape; pod-to-pod lateral movement; container running as root | `runAsNonRoot: true` + `runAsUser: 65532` + `readOnlyRootFilesystem: true` + `capabilities.drop: [ALL]` + `allowPrivilegeEscalation: false` + `seccompProfile: RuntimeDefault`; distroless `nonroot` base has no shell or setuid binaries; NetworkPolicy restricts ingress to `ingress-nginx` + `monitoring` namespaces, egress to DNS + outbound; Kyverno cluster policies enforce `runAsNonRoot`, ban `:latest`, require resources at admission time | `charts/app/values.yaml` (`podSecurityContext`, `containerSecurityContext`); `charts/app/templates/networkpolicy.yaml`; `charts/policies/templates/*.yaml`; `Dockerfile` (distroless `nonroot` base) | The EC2 host (not the pod) still has a broader IAM role than the workload needs — accepted because the role is `AmazonSSMManagedInstanceCore` only; revisit if more privileges get added |
+
+### Known unaddressed threats
+
+- **Runtime threat detection.** No Falco, Tetragon, or equivalent. We catch policy violations at admission (Kyverno) but not at runtime.
+- **Supply-chain build provenance.** Cosign signing proves the image came from this workflow, but we don't publish in-toto SLSA Level 3 provenance attestations. A follow-up would add `slsa-framework/slsa-github-generator`.
+- **Network-egress filtering.** The NetworkPolicy permits arbitrary outbound; a compromised pod could exfiltrate. Tightening requires knowing which external endpoints are legitimate (none today).
+- **Secrets at rest in the cluster.** Kubernetes Secrets are base64, not encrypted. For a case study this is acceptable; production should turn on encryption-at-rest for etcd or use an external secret store (AWS Secrets Manager, Vault).
+- **Time-bounded credentials in the pod.** The pod has no AWS creds today, but if it gains them via IRSA, rotate-on-demand requires solving credential refresh.

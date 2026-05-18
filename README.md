@@ -1,10 +1,16 @@
 # insider-one-devops
 
+[![CI](https://github.com/borailci/insider-one-devops/actions/workflows/ci.yml/badge.svg)](https://github.com/borailci/insider-one-devops/actions/workflows/ci.yml)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fborailci%2Finsider--one--devops-blue?logo=github)](https://github.com/borailci/insider-one-devops/pkgs/container/insider-one-devops)
+[![Signed with cosign](https://img.shields.io/badge/cosign-keyless%20(GitHub%20OIDC)-7C3AED?logo=sigstore)](https://docs.sigstore.dev/cosign/)
+[![SBOM CycloneDX](https://img.shields.io/badge/SBOM-CycloneDX%20%2B%20Syft-1C7C54)](https://anchore.com/sbom/)
+[![Trivy](https://img.shields.io/badge/trivy-CRITICAL%2FHIGH%20gate-DC2626)](https://aquasecurity.github.io/trivy)
+
 > InsiderOne DevOps Internship Case Study 2026 — Track A (Minikube on EC2 + Elastic IP).
 
-A tiny Go HTTP service shipped through the full DevOps loop: container → Helm on minikube → GitHub Actions CI/CD with Trivy/gitleaks → Prometheus + Grafana observability → public URL.
+A tiny Go HTTP service shipped through the full DevOps loop: container → Helm on minikube → GitHub Actions CI/CD with Trivy/gitleaks/cosign/Syft → Prometheus + Grafana observability → public URL.
 
-The contract is in [`SPEC.md`](./SPEC.md). Every change in this repo traces to a numbered requirement (FR/NFR/AC/EC/OS) in that spec.
+The contract is in [`SPEC.md`](./SPEC.md). Every change in this repo traces to a numbered requirement (FR/NFR/AC/EC/OS) in that spec. The set of bonus features that go beyond the contract is summarized under [Bonus features](#bonus-features) below.
 
 ## Endpoints
 
@@ -35,6 +41,12 @@ PORT=9090 LOG_LEVEL=debug go run .
 ```
 
 See `.env.example` for the full list of supported variables.
+
+One-command end-to-end on a fresh laptop (minikube + chart + helm tests + smoke curl):
+
+```bash
+make demo
+```
 
 ## Build
 
@@ -136,11 +148,32 @@ Auto-deploy on merge to `main`:
 
 Deploy strategy rationale is in [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md). Required GitHub Actions secrets: `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`. The IAM role is provisioned by `terraform/iam-oidc.tf` (see [`terraform/README.md`](./terraform/README.md)).
 
+### Verifying the supply chain
+
+Every image pushed by `main` is built multi-arch (linux/amd64 + linux/arm64), Trivy-scanned (fail on CRITICAL/HIGH), Syft-SBOM'd, and signed by cosign in keyless mode (GitHub OIDC). Any reviewer can confirm an image came from this workflow:
+
+```bash
+# 1. Resolve the digest (or use the :latest tag).
+docker buildx imagetools inspect ghcr.io/borailci/insider-one-devops:latest
+
+# 2. Verify the signature (no key material; identity is bound to the OIDC issuer).
+cosign verify ghcr.io/borailci/insider-one-devops@<digest> \
+  --certificate-identity-regexp '^https://github.com/borailci/insider-one-devops/.github/workflows/.*$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 3. Pull the SBOM published alongside the image.
+cosign download sbom ghcr.io/borailci/insider-one-devops@<digest> > sbom.cdx.json
+```
+
+`make sign-verify` wraps steps 1 + 2 for the `:latest` tag.
+
 ## Infrastructure & observability (Day 4)
 
 A diagram with full data flow is in [`docs/architecture.md`](./docs/architecture.md).
 
-**Public URL.** One `t3.micro` (AL2023) provisioned by Terraform under `terraform/ec2.tf`, with an Elastic IP, a Security Group (80/443 public, 22 narrowed), and an SSM instance profile so CI can drive `kubectl set image` without exposing the Kubernetes API. The cloud-init user-data is `scripts/bootstrap-ec2.sh` — it installs Docker, minikube, kubectl, Helm, then `helm upgrade --install`s the app chart with `values-prod.yaml`.
+**Public URL.** One EC2 instance (default `t3.medium` AL2023 — sized for kube-prometheus-stack; `t3.micro` is documented but does not fit the full obs stack) provisioned by Terraform under `terraform/ec2.tf`, with an Elastic IP, a Security Group (80/443 public, 22 narrowed), and an SSM instance profile so CI can drive `kubectl set image` without exposing the Kubernetes API. The cloud-init user-data is `scripts/bootstrap-ec2.sh` — it installs Docker, minikube, kubectl, Helm, then `helm upgrade --install`s the app chart with `values-prod.yaml`.
+
+> **Live demo status (2026-05-18):** The AWS path has been re-provisioned and validated end-to-end. Two failure modes from earlier apply attempts were root-caused and fixed in this iteration: (1) `terraform.tfvars` was at the repo root so the `terraform/` apply auto-loaded `t3.micro` defaults instead of the intended `t3.medium`, causing minikube to fail with `RSRC_INSUFFICIENT_CONTAINER_MEMORY`; (2) the cloud-init bootstrap installed the app chart before kube-prometheus-stack, so the `ServiceMonitor` and `PrometheusRule` CRDs did not yet exist at install time. Both are fixed: tfvars moved into `terraform/`, the bootstrap installs CRDs first, and host port 80/443 routing is now done with `socat` systemd units instead of fragile iptables DNAT. Reviewers can `terraform apply` themselves; the live URL pattern is `http://<EIP>/{ping,healthz,version}` (catch-all ingress — no Host header needed in prod).
 
 ```sh
 # From the repo root:
@@ -155,6 +188,25 @@ terraform output public_url
 **Observability stack.** `kube-prometheus-stack` is installed via Helm into the `monitoring` namespace. The chart now ships a `ServiceMonitor` (`charts/app/templates/servicemonitor.yaml`) and a `PrometheusRule` (`charts/app/templates/prometheusrule.yaml`) that fires `AppDown` and `HighErrorRate` (> 5% 5xx for 2 m). The Grafana dashboard `dashboards/app.json` covers RPS, p50/p95/p99 latency, error rate, pod restarts, and a service-health stat.
 
 > **t3.micro reality.** 1 GiB of RAM is tight for minikube + the full obs stack. The bootstrap reduces resource requests aggressively; if the stack still does not schedule, [`RUNBOOK.md` § Observability fallback](./RUNBOOK.md#observability-fallback-t3micro-oom-path) documents three options (demo obs locally, upgrade to `t3.small`, or uninstall the obs stack on EC2). The chart and dashboard are environment-agnostic — they render and grade identically against any minikube.
+
+## Bonus features
+
+Each item below goes beyond the spec contract. Lower-effort first, higher-impact later.
+
+| Bonus | Where | Why it matters |
+|---|---|---|
+| **Multi-arch image** (linux/amd64 + linux/arm64) | `.github/workflows/ci.yml` (`build-scan-push`) | Reviewers on Apple Silicon and x86 both pull a native image. |
+| **Syft SBOM** (CycloneDX, indexed by digest in GHCR) | `.github/workflows/ci.yml`; reviewer download via `cosign download sbom` | Full dependency manifest published alongside the image. |
+| **Cosign keyless signing** (GitHub OIDC issuer) | `.github/workflows/ci.yml`; verified by `make sign-verify` | Tamper-evidence anchored to this repo + workflow, no key management. |
+| **Trivy SARIF → GitHub Security tab** | `.github/workflows/ci.yml` | Vulnerabilities become first-class GitHub issues with severity, not buried in CI logs. |
+| **kind smoke test in CI** (`integration-test` job) | `.github/workflows/ci.yml` | Runs the chart end-to-end on every push — catches integration bugs the unit tests can't. |
+| **HPA, NetworkPolicy, PodDisruptionBudget** in chart | `charts/app/templates/{hpa,networkpolicy,poddisruptionbudget}.yaml` | Production-posture trifecta: elasticity, segmentation, voluntary-disruption tolerance. |
+| **Helm chart tests** (`helm test app`) | `charts/app/templates/tests/` | One command verifies the deployed chart actually answers on `/ping`, `/healthz`, `/version`. |
+| **Kyverno cluster policies** | `charts/policies/templates/*.yaml` | Admission-time enforcement: ban `:latest`, require non-root, require resources. Live demo: `kubectl run nginx --image=nginx:latest` is rejected. |
+| **C4 architecture diagrams** (PlantUML) | [`docs/diagrams/`](./docs/diagrams/) — `make diagrams` to regenerate | Version-controlled diagrams (`.puml` source + checked-in SVGs); freshness gated by `make diagrams-check` in CI. |
+| **STRIDE threat model** | [`SECURITY.md` §8](./SECURITY.md) | Six threat categories, each row points at the implementing file. |
+| **Custom gitleaks rule** (`lone-token-in-env-file`) | `.gitleaks.toml` | Catches the class of mistake where a bare secret is pasted into `.env.example` without a `KEY=` prefix. |
+| **`make demo`** | `Makefile` | Reviewer runs one target, gets a working cluster + smoke test. |
 
 ## Docs map
 
