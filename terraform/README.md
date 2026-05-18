@@ -9,7 +9,7 @@ Local-state Terraform for the case study infra. Day 3 ships IAM; Day 4 adds EC2 
 | `versions.tf` | provider pins (aws ~> 5.60, tls ~> 4.0); region from `var.aws_region` |
 | `variables.tf` | inputs: region, github owner/repo, allowed OIDC subjects, instance type, operator CIDR, SSH key, project tag |
 | `iam-oidc.tf` | GitHub OIDC provider + IAM role + inline SSM policy for the CI deploy job |
-| `ec2.tf` | one EC2 (`t3.micro` AL2023) + Elastic IP + Security Group + SSM instance profile |
+| `ec2.tf` | one EC2 (`t3.medium` AL2023 — sized for kube-prom-stack) + Elastic IP + Security Group + SSM instance profile |
 | `../scripts/bootstrap-ec2.sh` | cloud-init user-data — installs docker / minikube / kubectl / helm and installs the app chart |
 
 ## Before you apply
@@ -19,7 +19,7 @@ Always narrow SSH. Create `terraform.tfvars` (gitignored):
 ```hcl
 operator_cidr  = "203.0.113.42/32"          # your IP/32
 ssh_public_key = "ssh-ed25519 AAAA... user"  # optional; omit to rely on SSM-only access
-# instance_type = "t3.small"                  # optional override if t3.micro OOMs
+# instance_type = "t3.medium"                # default; bump to "t3.large" if obs stack OOMs
 ```
 
 ## Apply

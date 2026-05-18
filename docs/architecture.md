@@ -90,7 +90,7 @@ Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Same content as 
                                   OIDC AssumeRoleWithWebIdentity            │
                                 ┌─────────────────────────────────────────► │
                                 ▼                                           │
-   ┌───────────── AWS (eu-central-1) ─────────────┐                         │
+   ┌───────────── AWS (eu-north-1) ────────────────┐                         │
    │                                              │                         │
    │   ┌──────────────┐    ┌───────────────────┐  │                         │
    │   │ IAM role     │    │ SSM SendCommand   │  │                         │

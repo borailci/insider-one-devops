@@ -1,13 +1,13 @@
 # Demo Checklist — commands used in the live session
 
-Step-by-step commands captured against the live stack (EIP `13.63.26.120`, instance `i-0fb7f03fe17ff7758`, region `eu-north-1`). Reproducible by anyone with the deploy IAM role.
+Step-by-step commands to drive a freshly-applied stack. The 2026-05-18 reference run used EIP `13.63.26.120` / instance `i-0fb7f03fe17ff7758`, both destroyed at session end. Re-applying terraform allocates a new EIP and instance ID — pull them from `terraform output` after apply.
 
-Set once per shell:
+Set once per shell (after `terraform apply`):
 
 ```bash
 export AWS_REGION=eu-north-1
-export INSTANCE_ID=i-0fb7f03fe17ff7758
-export EIP=13.63.26.120
+export INSTANCE_ID=$(cd terraform && terraform output -raw ec2_instance_id)
+export EIP=$(cd terraform && terraform output -raw public_ip)
 ```
 
 ---
@@ -197,7 +197,7 @@ terraform destroy -auto-approve
 aws ec2 describe-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
   --query 'Reservations[0].Instances[0].State.Name' --output text   # terminated
 aws ec2 describe-addresses --region "$AWS_REGION" \
-  --query 'Addresses[?PublicIp==`13.63.26.120`]'                    # empty list
+  --query "Addresses[?PublicIp=='$EIP']"                            # empty list
 ```
 
 ---

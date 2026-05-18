@@ -22,9 +22,11 @@ minikube through AWS SSM `Session Manager` (no public Kubernetes API).
 The deploy step is a single command:
 
 ```
-kubectl -n default set image deployment/app app=ghcr.io/borailci/insider-one-devops:<sha>
-kubectl -n default rollout status deployment/app --timeout=120s
+sudo -iu ec2-user kubectl -n default set image deployment/app-app app=ghcr.io/borailci/insider-one-devops:<sha>
+sudo -iu ec2-user kubectl -n default rollout status deployment/app-app --timeout=120s
 ```
+
+(`app-app` is the Helm fullname — release `app` + chart `app`. `sudo -iu ec2-user` is required because AL2023's default kubeconfig lives in that user's home.)
 
 ## Alternatives considered
 
@@ -53,7 +55,7 @@ kubectl -n default rollout status deployment/app --timeout=120s
 
 - **+** One-line deploy. No extra cluster controller. Fits single-node budget.
 - **+** Clean OIDC story — short-lived STS credentials per workflow run.
-- **+** Rollback is trivial: `kubectl rollout undo deployment/app`.
+- **+** Rollback is trivial: `kubectl rollout undo deployment/app-app`.
 - **−** Configuration drift between Git and cluster is not auto-detected. The
   cluster is authoritative for the running tag; the chart is authoritative for
   everything else. Acceptable because no human edits the cluster directly.

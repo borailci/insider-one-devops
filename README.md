@@ -143,7 +143,7 @@ Gates (NFR-4, NFR-5, NFR-9):
 Auto-deploy on merge to `main`:
 
 1. OIDC assumes the `insider-one-devops-github-deploy` IAM role (no long-lived keys in the repo).
-2. `aws ssm send-command` runs `kubectl -n default set image deployment/app app=<image>:<sha>` on the EC2 host.
+2. `aws ssm send-command` runs `sudo -iu ec2-user kubectl -n default set image deployment/app-app app=<image>:<sha>` on the EC2 host.
 3. `kubectl rollout status` blocks until the new ReplicaSet is healthy.
 
 Deploy strategy rationale is in [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md). Required GitHub Actions secrets: `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`. The IAM role is provisioned by `terraform/iam-oidc.tf` (see [`terraform/README.md`](./terraform/README.md)).

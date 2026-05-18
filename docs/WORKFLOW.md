@@ -17,7 +17,7 @@ git push origin main               # triggers CI
 
 # 3. verify
 gh run watch                       # 7 jobs go green
-curl http://13.63.26.120/version   # live URL serves the new SHA
+curl http://$EIP/version   # live URL serves the new SHA
 ```
 
 Everything below is what happens between those commands.
@@ -35,7 +35,7 @@ terraform apply -auto-approve
 
 This provisions:
 - AL2023 t3.medium EC2 in `eu-north-1`
-- Elastic IP `13.63.26.120` (the public URL)
+- Elastic IP (the public URL — `terraform output public_ip`)
 - Security Group: 80/443 open to world, 22 only to operator CIDR
 - IAM OIDC role `insider-one-devops-github-deploy` trusted by GitHub Actions
 - Cloud-init runs `scripts/bootstrap-ec2.sh` which installs Docker + minikube + kubectl + helm and lays down: **Kyverno → policies → kube-prometheus-stack → app** in that order.
@@ -159,10 +159,10 @@ GitHub Actions runner
        │ 1. Configure AWS credentials via OIDC
        │    (no long-lived keys; ID-token exchanged for STS creds)
        ▼
-arn:aws:iam::057548897384:role/insider-one-devops-github-deploy
+arn:aws:iam::<account-id>:role/insider-one-devops-github-deploy
        │
        │ 2. aws ssm send-command
-       │    target = $EC2_INSTANCE_ID (i-0fb7f03fe17ff7758)
+       │    target = $EC2_INSTANCE_ID  (from terraform output)
        │    commands = [
        │      "sudo -iu ec2-user kubectl -n default \
        │         set image deployment/app-app app=ghcr.io/.../insider-one-devops:<sha>",
@@ -175,7 +175,7 @@ EC2 → minikube → Deployment app-app rolling update
        │ 3. Readiness probe on /healthz gates the new pod into the Service
        │ 4. ingress-nginx routes traffic only when all new pods Ready
        ▼
-http://13.63.26.120/version  →  {"sha":"<new-sha>", ...}
+http://$EIP/version  →  {"sha":"<new-sha>", ...}
 ```
 
 Why `kubectl set image` not GitOps (ArgoCD/Flux): single-node minikube target + small team → an extra controller is more moving parts than it saves. ADR-0003 records the trade-off.
@@ -186,10 +186,11 @@ Why `kubectl set image` not GitOps (ArgoCD/Flux): single-node minikube target + 
 
 ```bash
 # Endpoint health (from anywhere)
-curl http://13.63.26.120/{ping,healthz,version}
+curl http://$EIP/{ping,healthz,version}
 
 # Pod health (via SSM, no SSH)
-aws ssm send-command --region eu-north-1 --instance-ids i-0fb7f03fe17ff7758 \
+INSTANCE_ID=$(cd terraform && terraform output -raw ec2_instance_id)
+aws ssm send-command --region eu-north-1 --instance-ids "$INSTANCE_ID" \
   --document-name AWS-RunShellScript \
   --parameters 'commands=["sudo -iu ec2-user kubectl get pods -A"]'
 

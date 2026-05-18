@@ -12,7 +12,7 @@ Traceability: FR-31, AC-35. Covers restart, logs, rollback, EC2 access, alerts. 
 |---|---|
 | Public URL | `http://<EIP>` with `Host: app.insider-one.example` — get EIP from `terraform output public_ip` |
 | EC2 instance | `terraform output ec2_instance_id` |
-| AWS region | `eu-central-1` |
+| AWS region | `eu-north-1` |
 | Kubernetes namespace (app) | `default` |
 | Kubernetes namespace (obs) | `monitoring` |
 | Helm release (app) | `app` |
@@ -96,8 +96,8 @@ sudo tail -100 /var/log/cloud-init-output.log
 
 ```sh
 # Rolling restart, same image:
-kubectl -n default rollout restart deployment/app
-kubectl -n default rollout status deployment/app --timeout=120s
+kubectl -n default rollout restart deployment/app-app
+kubectl -n default rollout status deployment/app-app --timeout=120s
 
 # Restart minikube itself (last resort):
 minikube stop && minikube start
@@ -120,7 +120,7 @@ helm -n default history app
 
 # 2. Roll back to the last known good revision:
 helm -n default rollback app 2
-helm -n default rollout status deployment/app --timeout=120s
+helm -n default rollout status deployment/app-app --timeout=120s
 
 # 3. Confirm:
 curl -sS -H 'Host: app.insider-one.example' http://<EIP>/version
