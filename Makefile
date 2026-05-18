@@ -70,6 +70,12 @@ diagrams: ## Render docs/diagrams/*.puml -> .svg via PlantUML in Docker
 	@command -v docker >/dev/null || { echo "docker is required for 'make diagrams'"; exit 1; }
 	@docker run --rm -v "$$(pwd)/$(DIAGRAMS_DIR):/work" -w /work $(PLANTUML_IMAGE) \
 		-tsvg -o /work *.puml
+	@# PlantUML emits preserveAspectRatio="none" which stretches text when
+	@# GitHub renders the embedded SVG inside a width-constrained column.
+	@# Rewrite it to "xMidYMid meet" so the SVG scales proportionally.
+	@for f in $(DIAGRAMS_DIR)/*.svg; do \
+		sed -i.bak 's/preserveAspectRatio="none"/preserveAspectRatio="xMidYMid meet"/g' "$$f" && rm -f "$$f.bak"; \
+	done
 	@ls -1 $(DIAGRAMS_DIR)/*.svg
 
 .PHONY: diagrams-check

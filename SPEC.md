@@ -8,7 +8,7 @@
 - **Reviewers:** insider-one-devops team
 - **Track:** A — Minikube on AWS free-tier EC2 + Elastic IP
 - **Language:** Go (stdlib `net/http`)
-- **Source brief:** `goals.md`, `InsiderOne_DevOps_Internship_Case_Study_2026_v2[43].pdf`
+- **Source brief:** [`docs/case-study-brief.pdf`](docs/case-study-brief.pdf)
 
 ## Context
 

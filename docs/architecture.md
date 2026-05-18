@@ -20,9 +20,50 @@ Source: [`diagrams/container.puml`](diagrams/container.puml). Decomposes the cas
 
 ### Deployment / CI/CD
 
-![CI/CD pipeline](diagrams/deployment.svg)
+Two views — a short Mermaid pipeline (renders natively on GitHub, no overlap) and a fuller PlantUML deployment view for the AWS/EC2 side.
 
-Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Walks a commit from `git push` through every pipeline stage (lint → test → gitleaks → helm-validate → build-scan-sign → kind integration → deploy) to a live cluster.
+#### Pipeline (GitHub Actions–style, left → right)
+
+Same shape as the **Actions → Workflow** graph on github.com: parallel jobs stack vertically, dependencies flow left to right.
+
+```mermaid
+flowchart LR
+    classDef job fill:#fff,stroke:#444,stroke-width:1px,color:#111;
+    classDef ok  fill:#d4f5d8,stroke:#2a7a3a,stroke-width:1px,color:#111;
+    classDef art fill:#eef4ff,stroke:#3554a3,stroke-width:1px,color:#111;
+
+    lint([lint])
+    test([test])
+    leaks([gitleaks])
+    helmval([helm-validate])
+    build([build-scan-push])
+    kindjob([integration-test])
+    deploy([deploy])
+
+    lint     --> build
+    test     --> build
+    leaks    --> build
+    helmval  --> build
+    build    --> kindjob
+    kindjob  --> deploy
+    build    -. push+sign+attest .-> ghcr[(ghcr.io)]
+    deploy   -. ssm:SendCommand .-> ec2[(EC2 minikube)]
+    ec2      -. pull on rollout .-> ghcr
+
+    class lint,test,leaks,helmval,build,kindjob,deploy job
+    class ghcr,ec2 art
+```
+
+Reads like the Actions UI: four parallel gates on the left, then build → integration → deploy single-track on the right. Side artifacts (GHCR push, EC2 rollout) shown with dashed lines so they don't clutter the main chain.
+
+<details>
+<summary>Strict C4 deployment view (PlantUML SVG — click to expand)</summary>
+
+![Deployment view](diagrams/deployment.svg)
+
+Source: [`diagrams/deployment.puml`](diagrams/deployment.puml). Same content as the Mermaid above, in C4-PlantUML notation. Open the raw SVG ([link](diagrams/deployment.svg)) to read it at native size — the in-line render is downscaled by GitHub.
+
+</details>
 
 <details>
 <summary>Click for the original ASCII topology (terminal-friendly view)</summary>

@@ -259,4 +259,4 @@ The `--certificate-identity-regexp` clause is the key bit: it binds the signatur
 | Policy / guardrails | `charts/policies/templates/*` (Kyverno ClusterPolicies) |
 | Observability | `charts/app/templates/servicemonitor.yaml`, `prometheusrule.yaml`, `dashboards/*.json` |
 | Docs | `README.md`, `RUNBOOK.md`, `SECURITY.md`, `docs/adr/*`, `docs/diagrams/*` |
-| Demo evidence | `docs/CHECKLIST.md`, `docs/screenshots/*` |
+| Demo evidence | `docs/CHECKLIST.md` |

@@ -3,53 +3,58 @@
 
 title CI/CD pipeline — code to signed image to live cluster
 
-LAYOUT_LEFT_RIGHT()
+' Top-down layout reads as a vertical pipeline. Parallel gates (lint/test/
+' gitleaks/helm-validate) are grouped on one row inside the workflow node so
+' they don't stretch the diagram horizontally.
+
+skinparam linetype ortho
+skinparam ranksep 18
+skinparam nodesep 10
 
 Person(dev, "Developer", "git push to main / PR")
 
 Deployment_Node(github, "github.com", "SaaS") {
   Container(repo, "borailci/insider-one-devops", "Repo")
-  Container(actions, "GitHub Actions", "CI runner (ubuntu-latest)")
+  Container(actions, "GitHub Actions", "CI runner")
   Container(oidc, "OIDC issuer", "token.actions.githubusercontent.com")
 }
 
-Deployment_Node(pipeline, "Workflow: ci.yml", "Pipeline job sequence") {
-  Container(lint, "lint", "go vet + go fmt + golangci-lint")
-  Container(test, "test", "go test ./...")
-  Container(gitleaks, "gitleaks", "Secret scan with custom rule")
-  Container(helmval, "helm-validate", "helm lint + helm template")
-  Container(build, "build-scan-push", "Buildx multi-arch (amd64+arm64); Trivy → SBOM via Syft → cosign keyless sign → cosign verify gate")
-  Container(kindjob, "integration-test", "kind cluster + helm install + helm test (catches install-order bugs)")
-  Container(deploy, "deploy", "Assume role via OIDC, run kubectl set image via SSM")
+Deployment_Node(pipeline, "Workflow: ci.yml", "Pipeline (top → bottom)") {
+  Deployment_Node(gates, "Parallel gates", "must all pass") {
+    Container(lint, "lint", "golangci-lint")
+    Container(test, "test", "go test -race -cover")
+    Container(gitleaks, "gitleaks", "secret scan")
+    Container(helmval, "helm-validate", "helm lint + kubeconform")
+  }
+  Container(build, "build-scan-push", "Buildx multi-arch · Trivy · Syft SBOM · cosign sign+verify")
+  Container(kindjob, "integration-test", "kind + helm install + helm test")
+  Container(deploy, "deploy", "OIDC → SSM → kubectl set image")
 }
 
 Deployment_Node(ghcr, "ghcr.io", "OCI registry") {
-  Container(image, "insider-one-devops", "Multi-arch image + signature + SBOM (CycloneDX)")
+  Container(image, "insider-one-devops", "Multi-arch image + .sig + .att (SBOM)")
 }
 
 Deployment_Node(aws, "AWS eu-north-1", "Cloud") {
-  Container(role, "IAM role", "insider-one-devops-github-deploy (OIDC trust, sub=main+prod env)")
-  Deployment_Node(ec2, "EC2 t3.medium", "Amazon Linux 2023") {
-    Container(mk, "minikube", "Single-node k8s. Runs ingress-nginx, app, kube-prometheus-stack, Kyverno.")
+  Container(role, "IAM role", "insider-one-devops-github-deploy")
+  Deployment_Node(ec2, "EC2 t3.medium", "AL2023") {
+    Container(mk, "minikube", "ingress-nginx + app + kube-prom-stack + Kyverno")
   }
 }
 
-Rel(dev, repo, "git push")
-Rel(repo, actions, "workflow_run on push/PR")
-Rel(actions, oidc, "Request OIDC token")
-Rel(oidc, role, "AssumeRoleWithWebIdentity (sub matches main or prod env)")
+Rel_D(dev, repo, "git push")
+Rel_D(repo, actions, "trigger")
+Rel_R(actions, oidc, "request ID-token")
+Rel_D(oidc, role, "AssumeRoleWithWebIdentity")
 
-Rel(actions, lint, "")
-Rel(lint, test, "")
-Rel(test, gitleaks, "")
-Rel(gitleaks, helmval, "")
-Rel(helmval, build, "")
-Rel(build, image, "push + sign + attach SBOM")
-Rel(build, kindjob, "")
-Rel(kindjob, deploy, "main only")
-Rel(deploy, role, "Assume")
-Rel(role, mk, "ssm:SendCommand → kubectl set image")
-Rel(mk, image, "Pull on rollout")
+Rel_D(actions, gates, "fan-out")
+Rel_D(gates, build, "")
+Rel_D(build, kindjob, "")
+Rel_D(kindjob, deploy, "main only")
+Rel_R(build, image, "push + sign + attest")
+Rel_R(deploy, role, "assume")
+Rel_R(role, mk, "ssm:SendCommand")
+Rel_L(mk, image, "pull on rollout")
 
 SHOW_LEGEND()
 @enduml

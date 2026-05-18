@@ -1,66 +1,78 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) sessions on this repo.
 
-## Project context
+## What this repo is
 
-This repo is the deliverable for the **InsiderOne DevOps Internship Case Study 2026**. The brief lives in `InsiderOne_DevOps_Internship_Case_Study_2026_v2[43].pdf` and a condensed plan in `goals.md`. At the time of writing, no application code exists yet — the repo is bootstrapped from scratch following the 4-day mission described in `goals.md`.
+Deliverable for the **InsiderOne DevOps Internship Case Study 2026**. The full contract is in [`SPEC.md`](./SPEC.md); the original brief PDF is [`docs/case-study-brief.pdf`](./docs/case-study-brief.pdf).
 
-The end state is a tiny HTTP service (Node, Go, or Python — not yet chosen) shipped through a full DevOps loop: container → Helm on minikube → GitHub Actions CI/CD with Trivy/gitleaks → Prometheus/Grafana observability → public URL via EC2+EIP (Track A) or ngrok/cloudflared tunnel (Track B).
+A tiny Go HTTP service shipped through the full DevOps loop: container → Helm on minikube → GitHub Actions CI with Trivy/gitleaks/cosign/Syft → Prometheus/Grafana observability → public URL via EC2+EIP (Track A).
 
-## Mission constraints (from `goals.md`)
+The case-study scope is complete and CI is green (7/7). Live stack is destroyed unless someone runs `terraform apply` again — see `docs/CHECKLIST.md`.
 
-These shape what "done" looks like and override generic best-practice instincts:
+## Locked decisions (don't relitigate without ADR)
 
-- **Single-node Kubernetes is the target.** Minikube only — do not introduce production-grade cluster patterns (multi-master, cloud-managed control plane). A Deployment + Service + Ingress is the expected shape.
-- **Build a Helm chart from `helm create`**, not raw manifests. Two values files (`values-dev.yaml`, `values-prod.yaml`) must differ meaningfully (replicas, resources, host).
-- **Three required endpoints:** `GET /ping` → `pong`, `GET /healthz` for probes, `GET /version` returning the build SHA. Config is env-driven.
-- **Container must be multi-stage and run non-root.**
-- **CI gate is non-negotiable:** lint → test → docker build → Trivy scan (fail on CRITICAL/HIGH) → push to GHCR. Auto-deploy to minikube on merge to `main` (either `kubectl set image` or ArgoCD/Flux — the choice goes in an ADR).
-- **Secrets stay out of the repo.** Track A uses AWS OIDC, not long-lived keys. `gitleaks` is expected in CI.
-- **Observability bar:** JSON structured logs (timestamp, level, msg, request_id), `/metrics` in Prometheus format, kube-prometheus-stack installed via Helm, ≥1 Grafana dashboard, ≥1 alert rule.
-- **Docs are deliverables**, not afterthoughts: `README.md`, `RUNBOOK.md`, `SECURITY.md`, ~3 ADRs, an architecture diagram. ADRs answer "why Helm", "why this base image", "why this tunnel".
+- **Track A — minikube on EC2 + EIP.** ADR-0001.
+- **Go + stdlib net/http.** ADR-0002.
+- **`kubectl set image` via SSM**, not ArgoCD/Flux. ADR-0003.
+- **AWS account `057548897384` has no free tier** — every EC2 hour is billable. Always `terraform destroy` after demos.
 
-## Locked decisions
+## Hard constraints (override generic best-practice instincts)
 
-- **Track: A — Minikube on AWS free-tier EC2** with Elastic IP for the public URL. Terraform (local state) provisions EC2 + EIP + Security Group. CI authenticates to AWS via OIDC; no long-lived access keys in the repo.
-- **Language: Go.** Chosen for small static binary, fast cold start, smallest non-root container (distroless or scratch base), and a first-class Prometheus client. Stdlib `net/http` is sufficient — no framework needed for three endpoints.
+- **Single-node target.** Minikube only. No multi-master / cloud-managed K8s patterns.
+- **`helm create` lineage**, not raw manifests. Two values files differ meaningfully.
+- **Three endpoints + `/metrics`.** Env-driven config.
+- **Multi-stage, non-root container.** Distroless `static-debian12:nonroot`.
+- **CI gate is non-negotiable:** lint → test → helm-validate → gitleaks → build+Trivy+cosign+SBOM+push → kind integration → deploy.
+- **Secrets never committed.** OIDC for AWS. `gitleaks` runs every push.
+- **Conventional Commits**; `main` + feature branches; PR template; CODEOWNERS.
 
-Both choices must be justified in their own ADR (`docs/adr/0001-track.md`, `docs/adr/0002-language.md`).
-
-## Repo hygiene expectations
-
-- Conventional Commits (the existing `git log` already follows `feat(...):` / `refactor(docs):` style).
-- `main` + feature branches; PR template; CODEOWNERS; branch protection on `main`.
-- A `.env.example` (never a real `.env`) and `.gitignore` from day one.
-
-## Git layout
-
-This directory is its own git repository (initialized 2026-05-16, branch `main`). Future remote: `github.com/borailci/insider-one-devops`. A parent `/Users/borailci/Code/.git` still exists one level up but is ignored — operate only inside this repo. The parent repo's history is unrelated and must not be referenced.
-
-## Working directory layout (current)
+## Where things live
 
 ```
-insider-one/
-├── .claude/                 # Claude Code settings (local)
-├── CLAUDE.md                # this file
-├── goals.md                 # condensed 4-day plan extracted from the PDF
-└── InsiderOne_DevOps_Internship_Case_Study_2026_v2[43].pdf
+.
+├── main.go, main_test.go        # Go service (stdlib http + slog + prom client)
+├── Dockerfile                   # multi-stage → distroless nonroot
+├── charts/
+│   ├── app/                     # case-study chart (helm create lineage)
+│   └── policies/                # Kyverno ClusterPolicies (bonus)
+├── .github/workflows/ci.yml     # 7-job pipeline (see docs/WORKFLOW.md)
+├── terraform/                   # EC2 + EIP + SG + OIDC role (local state)
+├── scripts/bootstrap-ec2.sh     # cloud-init: docker, minikube, helm,
+│                                #   kyverno → policies → kps → app
+├── dashboards/                  # Grafana JSON
+├── docs/
+│   ├── architecture.md          # C4 view + mermaid pipeline
+│   ├── diagrams/                # PlantUML sources + SVG (make diagrams)
+│   ├── adr/                     # 3 ADRs (track / language / deploy)
+│   ├── WORKFLOW.md              # dev → ship loop
+│   ├── CHECKLIST.md             # copy-paste demo commands
+│   └── case-study-brief.pdf     # original requirements
+├── README.md, RUNBOOK.md, SECURITY.md, SPEC.md
+└── Makefile                     # build / test / docker / demo / diagrams / sign-verify
 ```
 
-Everything else (app code, Dockerfile, `charts/`, `.github/workflows/`, `terraform/` or `Makefile`, `docs/`) is yet to be created and should be scaffolded as the mission days are tackled.
+## Useful entry points
 
-## Day-by-day deliverables (reference)
+- **Demo locally:** `make demo` (kind cluster + chart + tests + smoke).
+- **Verify supply chain:** `make sign-verify`.
+- **Render diagrams:** `make diagrams` (also normalizes SVG aspect ratios).
+- **Bring up live stack:** `cd terraform && terraform apply -auto-approve` then wait ~5–10 min for cloud-init. Marker: `/var/log/bootstrap-done`. Tear down: `terraform destroy -auto-approve`.
+- **Operate the live cluster without SSH:** all commands go through SSM Run-Command. See `docs/CHECKLIST.md` §2 for the `ssmrun` helper.
 
-| Day | Focus | Key artifacts |
-|-----|-------|---------------|
-| 1 | Foundation | App with 3 endpoints, multi-stage non-root Dockerfile, unit tests, repo hygiene |
-| 2 | Kubernetes & Helm | Helm chart, dev/prod values, probes pointing at `/healthz`, resource requests/limits |
-| 3 | CI/CD & supply chain | Actions workflow, Trivy + gitleaks, GHCR push, auto-deploy on merge |
-| 4 | Observability & docs | JSON logs, `/metrics`, kube-prometheus-stack, Grafana dashboard + alert, IaC, RUNBOOK, ADRs, diagram |
+## Things to be careful with
 
-Day-2 checkpoint (from `goals.md`): `helm upgrade --install app -f values-dev.yaml` → pods Running, probes Healthy; same command with `values-prod.yaml` produces different replica count and host.
+- `.env` is gitignored and may contain a real Grafana password during a demo session. Never `git add -A` — stage paths explicitly.
+- GHCR images are private (matches repo visibility as of 2026-05-18). `cosign verify` from outside the org requires either re-publishing public or invited access.
+- Bootstrap installs Kyverno **before** any workload. Adding a new chart that runs as root / pins `:latest` / omits resources will be rejected at admission — check `charts/policies/templates/*` first.
+- `image.tag` in the bootstrap is pinned to the short SHA the EC2 cloned, so it satisfies the `disallow-latest-tag` ClusterPolicy. Don't pass `--set image.tag=latest` anywhere.
 
-## Bonuses (only if time permits)
+## Day-by-day deliverable map (for spot-checks)
 
-HPA, NetworkPolicy, PodDisruptionBudget, cosign signing, Syft SBOM, multi-arch builds, Kyverno/OPA policies, ArgoCD ApplicationSet, custom domain + cert-manager TLS. Each bonus should be justified in the README in one or two sentences.
+| Day | Focus | Where it landed |
+|-----|-------|-----------------|
+| 1 | App + container + repo hygiene | `main.go`, `Dockerfile`, `.github/`, `.golangci.yml`, `.gitleaks.toml` |
+| 2 | Helm + K8s | `charts/app/`, dev/prod values, probes, resources |
+| 3 | CI/CD + supply chain | `.github/workflows/ci.yml` (7 jobs), GHCR push, OIDC, cosign, Syft, Trivy |
+| 4 | Observability + IaC + docs | `terraform/`, `scripts/bootstrap-ec2.sh`, ServiceMonitor, PrometheusRule, dashboards, RUNBOOK, SECURITY, ADRs, C4 diagrams |
+| Bonus | HPA, NetworkPolicy, PDB, Kyverno, cosign, Syft, multi-arch, helm tests, C4 PlantUML, STRIDE | see README §Bonus features |
