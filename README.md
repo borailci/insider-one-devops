@@ -191,22 +191,67 @@ terraform output public_url
 
 ## Bonus features
 
-Each item below goes beyond the spec contract. Lower-effort first, higher-impact later.
+> **TL;DR — 12 bonuses delivered, grouped below by theme.** Every row links to the implementing file.
 
-| Bonus | Where | Why it matters |
-|---|---|---|
-| **Multi-arch image** (linux/amd64 + linux/arm64) | `.github/workflows/ci.yml` (`build-scan-push`) | Reviewers on Apple Silicon and x86 both pull a native image. |
-| **Syft SBOM** (CycloneDX, indexed by digest in GHCR) | `.github/workflows/ci.yml`; reviewer download via `cosign download sbom` | Full dependency manifest published alongside the image. |
-| **Cosign keyless signing** (GitHub OIDC issuer) | `.github/workflows/ci.yml`; verified by `make sign-verify` | Tamper-evidence anchored to this repo + workflow, no key management. |
-| **Trivy SARIF → GitHub Security tab** | `.github/workflows/ci.yml` | Vulnerabilities become first-class GitHub issues with severity, not buried in CI logs. |
-| **kind smoke test in CI** (`integration-test` job) | `.github/workflows/ci.yml` | Runs the chart end-to-end on every push — catches integration bugs the unit tests can't. |
-| **HPA, NetworkPolicy, PodDisruptionBudget** in chart | `charts/app/templates/{hpa,networkpolicy,poddisruptionbudget}.yaml` | Production-posture trifecta: elasticity, segmentation, voluntary-disruption tolerance. |
-| **Helm chart tests** (`helm test app`) | `charts/app/templates/tests/` | One command verifies the deployed chart actually answers on `/ping`, `/healthz`, `/version`. |
-| **Kyverno cluster policies** | `charts/policies/templates/*.yaml` | Admission-time enforcement: ban `:latest`, require non-root, require resources. Live demo: `kubectl run nginx --image=nginx:latest` is rejected. |
-| **C4 architecture diagrams** (PlantUML) | [`docs/diagrams/`](./docs/diagrams/) — `make diagrams` to regenerate | Version-controlled diagrams (`.puml` source + checked-in SVGs); freshness gated by `make diagrams-check` in CI. |
-| **STRIDE threat model** | [`SECURITY.md` §8](./SECURITY.md) | Six threat categories, each row points at the implementing file. |
-| **Custom gitleaks rule** (`lone-token-in-env-file`) | `.gitleaks.toml` | Catches the class of mistake where a bare secret is pasted into `.env.example` without a `KEY=` prefix. |
-| **`make demo`** | `Makefile` | Reviewer runs one target, gets a working cluster + smoke test. |
+### Supply chain & provenance
+
+> Goal: anyone can prove the image came from this repo, this commit, this workflow — and inspect what's inside.
+
+| # | Bonus | Where | What it gets you |
+|---|---|---|---|
+| 1 | **Cosign keyless signing** (GitHub OIDC) | [`ci.yml`](./.github/workflows/ci.yml) · [`make sign-verify`](./Makefile) | Tamper-evidence bound to repo + workflow + commit. Zero key management. |
+| 2 | **Syft SBOM** (CycloneDX, attached via `cosign attest`) | [`ci.yml`](./.github/workflows/ci.yml) | Full dependency manifest, verifiable & queryable: `cosign download sbom …` |
+| 3 | **Multi-arch image** (linux/amd64 + linux/arm64) | [`ci.yml`](./.github/workflows/ci.yml) `build-scan-push` | Native pull on Apple Silicon and x86. One GHCR tag, two manifests. |
+| 4 | **Trivy SARIF → GitHub Security tab** | [`ci.yml`](./.github/workflows/ci.yml) | CVEs become first-class findings with severity + dismissals, not buried in CI logs. |
+| 5 | **Custom gitleaks rule** `lone-token-in-env-file` | [`.gitleaks.toml`](./.gitleaks.toml) | Catches bare secrets pasted into `.env.example` without a `KEY=` prefix — the failure mode default rules miss. |
+
+### Kubernetes production posture
+
+> Goal: the chart isn't a toy — it includes the controls a real workload needs.
+
+| # | Bonus | Where | What it gets you |
+|---|---|---|---|
+| 6 | **HorizontalPodAutoscaler** (2–5 @ 60% CPU) | [`hpa.yaml`](./charts/app/templates/hpa.yaml) | Elasticity. Pairs with PDB. |
+| 7 | **NetworkPolicy** (default-deny ingress) | [`networkpolicy.yaml`](./charts/app/templates/networkpolicy.yaml) | Microsegmentation. Only ingress-nginx + monitoring can reach pods. |
+| 8 | **PodDisruptionBudget** (minAvailable: 1) | [`poddisruptionbudget.yaml`](./charts/app/templates/poddisruptionbudget.yaml) | Survives `kubectl drain` / node upgrades without dropping all replicas. |
+| 9 | **Kyverno ClusterPolicies** — require non-root, disallow `:latest`, require resources | [`charts/policies/`](./charts/policies/templates/) | Admission-time enforcement. Demo: `kubectl run nginx-bad --image=nginx:latest` is **rejected** with policy reasons. |
+
+### Testing & developer experience
+
+> Goal: any reviewer can run the whole loop in one command.
+
+| # | Bonus | Where | What it gets you |
+|---|---|---|---|
+| 10 | **kind integration test in CI** | [`ci.yml`](./.github/workflows/ci.yml) `integration-test` | Spins kind cluster, loads image, installs chart, smoke-tests `/ping` `/healthz` `/version`, runs `helm test`. |
+| 11 | **Helm chart tests** (`helm test app`) | [`charts/app/templates/tests/`](./charts/app/templates/tests/) | One command verifies the deployed chart actually answers on all three endpoints. |
+| 12 | **`make demo` one-shot** | [`Makefile`](./Makefile) | Reviewer runs `make demo` → minikube + chart + tests + smoke curl. |
+
+### Docs & threat modeling
+
+| # | Bonus | Where | What it gets you |
+|---|---|---|---|
+| 13 | **C4 architecture diagrams** (PlantUML) | [`docs/diagrams/`](./docs/diagrams/) · `make diagrams` | Version-controlled `.puml` sources + checked-in SVGs. Freshness gated by `make diagrams-check` in CI. |
+| 14 | **STRIDE threat model** | [`SECURITY.md` §8](./SECURITY.md) | Six threat categories; each row links to the implementing file. |
+| 15 | **`docs/WORKFLOW.md` + `docs/CHECKLIST.md`** | [`docs/WORKFLOW.md`](./docs/WORKFLOW.md) · [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) | End-to-end dev → ship loop + copy-paste demo commands. |
+
+### Verify it yourself
+
+```bash
+# 1. Pick a tag (any short SHA from GHCR)
+TAG=<short-sha>
+
+# 2. Verify signature (bound to this workflow file on this repo)
+make sign-verify
+# or manually:
+cosign verify ghcr.io/borailci/insider-one-devops:$TAG \
+  --certificate-identity-regexp 'https://github.com/borailci/insider-one-devops/.github/workflows/ci.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 3. Pull the SBOM
+cosign download sbom ghcr.io/borailci/insider-one-devops:$TAG | jq '.components | length'
+```
+
+> Full step-by-step (Grafana login, Kyverno denial demo, screenshot order, teardown) lives in [**`docs/CHECKLIST.md`**](./docs/CHECKLIST.md).
 
 ## Docs map
 
@@ -216,6 +261,8 @@ Each item below goes beyond the spec contract. Lower-effort first, higher-impact
 | [`docs/architecture.md`](./docs/architecture.md) | Topology diagram + trust boundaries + data flow |
 | [`RUNBOOK.md`](./RUNBOOK.md) | Operator guide — restart, logs, rollback, EC2 access, alerts |
 | [`SECURITY.md`](./SECURITY.md) | Threat model, secret handling, image-scan policy, OIDC trust |
+| [`docs/WORKFLOW.md`](./docs/WORKFLOW.md) | End-to-end dev → ship loop, gate-by-gate, failure modes |
+| [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) | Copy-paste commands used in the live demo |
 | [`docs/adr/0001-track.md`](./docs/adr/0001-track.md) | Why Track A on free-tier EC2 |
 | [`docs/adr/0002-language.md`](./docs/adr/0002-language.md) | Why Go + stdlib `net/http` |
 | [`docs/adr/0003-deploy-strategy.md`](./docs/adr/0003-deploy-strategy.md) | Why `kubectl set image` over ArgoCD/Flux |
