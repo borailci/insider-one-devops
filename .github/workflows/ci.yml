@@ -311,7 +311,7 @@ jobs:
             --instance-ids "$INSTANCE_ID" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${IMAGE}" \
-            --parameters commands="[\"sudo -u ubuntu kubectl -n default set image deployment/app app=${IMAGE} --record\",\"sudo -u ubuntu kubectl -n default rollout status deployment/app --timeout=120s\"]" \
+            --parameters commands="[\"sudo -iu ec2-user kubectl -n default set image deployment/app-app app=${IMAGE}\",\"sudo -iu ec2-user kubectl -n default rollout status deployment/app-app --timeout=120s\"]" \
             --query 'Command.CommandId' --output text)
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
           aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
