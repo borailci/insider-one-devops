@@ -26,7 +26,12 @@ ARG DISTROLESS_TAG=nonroot
 
 # --- Builder ---------------------------------------------------------------
 # Alpine variant of the Go image: small, has git/ca-certs needed for go mod.
-FROM golang:${GO_VERSION}-alpine AS builder
+# --platform=$BUILDPLATFORM pins the builder to the *runner's* native arch
+# (amd64 on GH-hosted runners) even when building an arm64 image. Combined
+# with GOARCH=$TARGETARCH below, this cross-compiles instead of running the
+# Go toolchain under QEMU translation — cuts multi-arch CI build from ~5 min
+# to ~1 min. CGO_ENABLED=0 makes this safe (no platform-specific linker).
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /src
 
 # Cache deps separately from source — only invalidated when go.{mod,sum} change.
@@ -38,14 +43,17 @@ COPY . .
 
 ARG BUILD_SHA=unknown
 ARG BUILD_TIME=unknown
-# CGO off  → fully static binary (works in distroless static).
-# GOOS=linux → cross-build target stays explicit even on arm64 runners.
-ENV CGO_ENABLED=0 GOOS=linux
+# TARGETOS / TARGETARCH are injected by buildx per --platform entry.
+# Single-arch local builds get sensible defaults via the := fallback.
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+# CGO off → fully static binary (works in distroless static).
+ENV CGO_ENABLED=0
 
 # -trimpath  : strip workspace paths from the binary (reproducible builds).
 # -s -w      : strip symbol + debug tables (smaller image).
 # -X main.X=Y: inject build-time vars consumed by /version.
-RUN go build \
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags "-s -w -X main.buildSHA=${BUILD_SHA} -X main.buildTime=${BUILD_TIME}" \
     -o /out/app \
