@@ -3,7 +3,7 @@
 #   - HighErrorRate: 5xx ratio > threshold over 5m
 # Alertmanager (installed by kube-prometheus-stack) routes these. Adjust
 # thresholds in values, not here.
-{{- if .Values.prometheusRule.enabled -}}
+{{- if .Values.prometheusRule.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:

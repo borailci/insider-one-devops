@@ -1,7 +1,7 @@
 # ServiceMonitor — CRD from kube-prometheus-stack. Tells the operator-managed
 # Prometheus to scrape /metrics via the named `http` Service port.
 # Without this, Prometheus runs but doesn't know the app exists.
-{{- if .Values.serviceMonitor.enabled -}}
+{{- if .Values.serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
