@@ -174,8 +174,14 @@ jobs:
           vuln-type: os,library
           exit-code: "0"
 
+      # SARIF upload requires GitHub Advanced Security on private repos.
+      # The repo is currently private, so the API returns 403 ("Resource not
+      # accessible by integration"). Don't fail the whole pipeline on it —
+      # the Trivy scan above already gates on CRITICAL/HIGH. When the repo
+      # flips public, SARIF resumes populating the Security tab.
       - name: Upload Trivy SARIF to GitHub Security
         if: always() && hashFiles('trivy-results.sarif') != ''
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
