@@ -87,7 +87,8 @@ jobs:
         run: |
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
             | tar -xz -C /usr/local/bin kubeconform
-      - run: helm lint charts/app
+      # Lint both overlays. Base values.yaml is exercised transitively (both
+      # overlays merge on top of it). A separate base-only lint added no signal.
       - run: helm lint charts/app -f charts/app/values-dev.yaml
       - run: helm lint charts/app -f charts/app/values-prod.yaml
       - run: |
@@ -113,14 +114,17 @@ jobs:
 
   # Image pipeline — only runs after all 4 gates above pass.
   # Steps inside:
-  #   1. setup-buildx (multi-arch via QEMU)
-  #   2. login to ghcr.io with GITHUB_TOKEN
-  #   3. buildx build --platform=linux/amd64,linux/arm64 (no push yet)
-  #   4. Trivy scan — fails build on CRITICAL/HIGH. SARIF uploaded to Security tab.
-  #   5. Push to GHCR (tags: short SHA + latest)
+  #   1. setup-buildx (cross-compile via GOARCH=$TARGETARCH, no QEMU)
+  #   2. Pre-scan local build (single-arch amd64) so Trivy can read the image.
+  #   3. Trivy scan — single SARIF pass: uploads to Security tab AND gates on
+  #      CRITICAL/HIGH (exit-code: 1 fails the build).
+  #   4. Login to ghcr.io with GITHUB_TOKEN.
+  #   5. buildx build --platform=linux/amd64,linux/arm64 + push to GHCR
+  #      (tags: short SHA + latest).
   #   6. cosign sign — keyless, uses GitHub OIDC; signature stored as .sig tag.
   #   7. syft → CycloneDX SBOM → cosign attest --type cyclonedx; .att tag in GHCR.
-  #   8. Output the SHA for downstream jobs (deploy/integration use it as image tag).
+  #   8. Output the SHA + digest for downstream jobs (integration pulls the
+  #      pushed image; deploy uses :<sha> as the image tag for kubectl set image).
   build-scan-push:
     name: build + Trivy + cosign + SBOM + push (GHCR)
     needs: [lint, test, helm-validate, gitleaks]
@@ -128,7 +132,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3      # arm64 emulation on amd64 runner
+      # QEMU not needed — Dockerfile cross-compiles via GOARCH=$TARGETARCH,
+      # so no arm64 instruction runs under emulation. Buildx alone is enough.
       - uses: docker/setup-buildx-action@v3
 
       - name: Compute build metadata
@@ -152,27 +157,23 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Trivy image scan (table — fail CI on CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.sha }}
-          format: table
-          exit-code: "1"
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          vuln-type: os,library
-
-      - name: Trivy image scan (SARIF — GitHub Security tab)
-        if: always()
+      # Single Trivy invocation: emits SARIF for the Security tab AND fails the
+      # build on CRITICAL/HIGH. Earlier setup ran two scans (table + SARIF) on
+      # the same image — same DB, same layers, double the wall-clock.
+      # trivy-action's exit-code gates on any --severity match, so the listed
+      # severities and the gate severities have to be the same set. Dropping
+      # MEDIUM from SARIF; MEDIUMs were never blocking and the GHCR base is
+      # distroless (negligible noise to lose).
+      - name: Trivy image scan (SARIF + gate on CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_REPO }}:${{ steps.meta.outputs.sha }}
           format: sarif
           output: trivy-results.sarif
-          severity: CRITICAL,HIGH,MEDIUM
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
           vuln-type: os,library
-          exit-code: "0"
+          exit-code: "1"
 
       # SARIF upload requires GitHub Advanced Security on private repos.
       # The repo is currently private, so the API returns 403 ("Resource not
@@ -274,8 +275,30 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      # On push-to-main, build-scan-push has already published the exact image
+      # we want to test — pull it instead of rebuilding (~30 s saved, and we
+      # validate the bit-identical artifact that deploy will roll). On PRs
+      # there is no GHCR push yet, so fall back to a local build.
+      - name: Log in to GHCR (for pull on main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull pushed image (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker pull ${{ env.IMAGE_REPO }}:${{ needs.build-scan-push.outputs.sha }}
+          docker tag  ${{ env.IMAGE_REPO }}:${{ needs.build-scan-push.outputs.sha }} app:ci
+
       - uses: docker/setup-buildx-action@v3
-      - name: Build image for kind (single-arch, local)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+
+      - name: Build image for kind (PRs only)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -286,6 +309,7 @@ jobs:
             BUILD_TIME=ci
           cache-from: type=gha
           platforms: linux/amd64
+
       - uses: helm/kind-action@v1
         with:
           version: v0.24.0
