@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>insider-one-devops · case study v0.1.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ===========================================
+   VIEWPORT FITTING: MANDATORY BASE STYLES
+   Include this ENTIRE file in every presentation.
+   These styles ensure slides fit exactly in the viewport.
+   =========================================== */
+
+/* 1. Lock html/body to viewport */
+html, body {
+    height: 100%;
+    overflow-x: hidden;
+}
+
+html {
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+}
+
+/* 2. Each slide = exact viewport height */
+.slide {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    overflow: hidden; /* CRITICAL: Prevent ANY overflow */
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* 3. Content container with flex for centering */
+.slide-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-height: 100%;
+    overflow: hidden; /* Double-protection against overflow */
+    padding: var(--slide-padding);
+}
+
+/* 4. ALL typography uses clamp() for responsive scaling */
+:root {
+    /* Titles scale from mobile to desktop */
+    --title-size: clamp(1.5rem, 5vw, 4rem);
+    --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+    --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+
+    /* Body text */
+    --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+    --small-size: clamp(0.65rem, 1vw, 0.875rem);
+
+    /* Spacing scales with viewport */
+    --slide-padding: clamp(1rem, 4vw, 4rem);
+    --content-gap: clamp(0.5rem, 2vw, 2rem);
+    --element-gap: clamp(0.25rem, 1vw, 1rem);
+}
+
+/* 5. Cards/containers use viewport-relative max sizes */
+.card, .container, .content-box {
+    max-width: min(90vw, 1000px);
+    max-height: min(80vh, 700px);
+}
+
+/* 6. Lists auto-scale with viewport */
+.feature-list, .bullet-list {
+    gap: clamp(0.4rem, 1vh, 1rem);
+}
+
+.feature-list li, .bullet-list li {
+    font-size: var(--body-size);
+    line-height: 1.4;
+}
+
+/* 7. Grids adapt to available space */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: clamp(0.5rem, 1.5vw, 1rem);
+}
+
+/* 8. Images constrained to viewport */
+img, .image-container {
+    max-width: 100%;
+    max-height: min(50vh, 400px);
+    object-fit: contain;
+}
+
+/* ===========================================
+   RESPONSIVE BREAKPOINTS
+   Aggressive scaling for smaller viewports
+   =========================================== */
+
+/* Short viewports (< 700px height) */
+@media (max-height: 700px) {
+    :root {
+        --slide-padding: clamp(0.75rem, 3vw, 2rem);
+        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+        --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+        --h2-size: clamp(1rem, 3vw, 1.75rem);
+    }
+}
+
+/* Very short viewports (< 600px height) */
+@media (max-height: 600px) {
+    :root {
+        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+        --title-size: clamp(1.1rem, 4vw, 2rem);
+        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+    }
+
+    /* Hide non-essential elements */
+    .nav-dots, .keyboard-hint, .decorative {
+        display: none;
+    }
+}
+
+/* Extremely short (landscape phones, < 500px height) */
+@media (max-height: 500px) {
+    :root {
+        --slide-padding: clamp(0.4rem, 2vw, 1rem);
+        --title-size: clamp(1rem, 3.5vw, 1.5rem);
+        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+        --body-size: clamp(0.65rem, 1vw, 0.85rem);
+    }
+}
+
+/* Narrow viewports (< 600px width) */
+@media (max-width: 600px) {
+    :root {
+        --title-size: clamp(1.25rem, 7vw, 2.5rem);
+    }
+
+    /* Stack grids vertically */
+    .grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===========================================
+   REDUCED MOTION
+   Respect user preferences
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+
+
+/* Insider-One palette */
+:root {
+  --navy:  #1B2A4E;
+  --teal:  #2BB3A3;
+  --grey:  #6B7785;
+  --pale:  #EEF2F7;
+  --paper: #FFFFFF;
+  --ink:   #0F1A33;
+  --line:  #DCE3EC;
+}
+html, body { background: var(--paper); color: var(--ink);
+  font-family: 'Nunito', system-ui, sans-serif; margin:0; }
+* { box-sizing: border-box; }
+body { -webkit-font-smoothing: antialiased; }
+
+/* Typography */
+h1, h2, h3, .cover-brand, .closing-brand, .closing-headline, .cover-headline,
+.section-badge, .stat-value { font-family: 'Archivo', sans-serif; font-weight: 800; }
+
+/* Slide chrome */
+.slide-header {
+  position: absolute; top: clamp(.6rem, 1.4vw, 1.2rem); left: clamp(.8rem, 2vw, 2rem);
+  right: clamp(.8rem, 2vw, 2rem); display: flex; justify-content: space-between;
+  font-size: clamp(.6rem, .9vw, .85rem); color: var(--grey); letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.slide-header .brand { font-weight: 600; }
+.slide-header .eyebrow { font-weight: 700; color: var(--teal); }
+.slide-title-block {
+  padding: clamp(2.5rem, 6vw, 4.5rem) clamp(.8rem, 2vw, 2rem) 0;
+  display: flex; flex-direction: column; gap: clamp(.2rem, .6vw, .6rem);
+}
+.section-badge {
+  color: var(--teal); font-size: clamp(1.2rem, 2.2vw, 2rem); line-height: 1;
+}
+.slide-title {
+  font-size: clamp(1.5rem, 3.5vw, 2.8rem); color: var(--navy); margin: 0;
+  line-height: 1.05;
+}
+.slide-subtitle {
+  margin: 0; color: var(--grey); font-style: italic;
+  font-size: clamp(.75rem, 1.2vw, 1rem);
+}
+.slide-footer {
+  position: absolute; bottom: clamp(.4rem, 1vw, 1rem); left: clamp(.8rem, 2vw, 2rem);
+  right: clamp(.8rem, 2vw, 2rem); display: flex; justify-content: space-between;
+  font-size: clamp(.55rem, .8vw, .75rem); color: var(--grey); letter-spacing: .03em;
+}
+.slide-body {
+  flex: 1; padding: clamp(.8rem, 2vw, 2rem) clamp(.8rem, 2vw, 2rem) clamp(2rem, 4vw, 3rem);
+  overflow: hidden; display: flex; flex-direction: column;
+  gap: clamp(.4rem, 1vw, 1rem); min-height: 0;
+}
+
+/* Two column */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(.8rem, 2vw, 2rem); }
+.col-head {
+  font-size: clamp(.7rem, 1vw, .9rem); color: var(--teal); margin: 0 0 .5rem 0;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+
+/* Cover slide */
+.slide-cover { background: var(--paper); }
+.cover-grid {
+  flex: 1; padding: clamp(2rem, 5vw, 4rem); display: grid; align-content: center;
+  gap: clamp(.6rem, 1.5vw, 1.5rem);
+}
+.cover-brand { font-size: clamp(.9rem, 1.2vw, 1.2rem); color: var(--teal);
+  text-transform: lowercase; letter-spacing: .08em; }
+.cover-tag { color: var(--grey); font-size: clamp(.8rem, 1.1vw, 1.05rem); }
+.cover-headline {
+  margin: clamp(.5rem, 1.5vw, 1.5rem) 0; font-size: clamp(2.5rem, 6vw, 5rem);
+  line-height: 1; color: var(--navy);
+}
+.cover-headline .accent { color: var(--teal); }
+.cover-summary { color: var(--ink); font-size: clamp(.9rem, 1.4vw, 1.2rem);
+  line-height: 1.5; max-width: 50ch; }
+.cover-meta { display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: clamp(1rem, 2vw, 2rem); margin-top: clamp(1rem, 2vw, 2rem); }
+.cover-meta .label { display: block; color: var(--teal); font-size: .7rem;
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: .25rem; }
+.cover-meta .value { color: var(--navy); font-weight: 600;
+  font-size: clamp(.85rem, 1.1vw, 1.1rem); }
+.cover-track {
+  border-top: 1px solid var(--line); padding-top: clamp(.5rem, 1vw, 1rem);
+  color: var(--grey); font-size: clamp(.7rem, 1vw, .9rem);
+}
+
+/* Stats */
+.prose { color: var(--ink); font-size: clamp(.85rem, 1.2vw, 1.05rem);
+  line-height: 1.55; max-width: 70ch; margin: 0; }
+.stat-grid { display: grid; grid-template-columns: repeat(6, 1fr);
+  gap: clamp(.5rem, 1vw, 1rem); margin-top: auto; }
+.stat-tile { background: var(--pale); padding: clamp(.6rem, 1.5vw, 1.4rem);
+  border-left: 3px solid var(--teal); border-radius: 4px; }
+.stat-value { color: var(--navy); font-size: clamp(1.4rem, 2.5vw, 2.2rem);
+  line-height: 1; }
+.stat-label { color: var(--grey); font-size: clamp(.6rem, .85vw, .8rem);
+  text-transform: uppercase; letter-spacing: .05em; margin-top: .35rem; }
+@media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* Tree */
+.tree { background: var(--pale); padding: clamp(.8rem, 2vw, 1.5rem); border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: clamp(.65rem, 1.05vw, .95rem); line-height: 1.55;
+  color: var(--navy); margin: 0; overflow: hidden;
+  border-left: 3px solid var(--teal); white-space: pre; }
+
+/* Bullets */
+.bullets { list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: clamp(.3rem, .8vw, .7rem); }
+.bullets li {
+  font-size: clamp(.75rem, 1.1vw, .95rem); line-height: 1.5;
+  padding-left: 1.2rem; position: relative; color: var(--ink);
+}
+.bullets li::before {
+  content: '—'; position: absolute; left: 0; color: var(--teal); font-weight: 700;
+}
+
+/* Tables */
+.data-table { width: 100%; border-collapse: collapse;
+  font-size: clamp(.65rem, .9vw, .85rem); }
+.data-table th { text-align: left; color: var(--teal);
+  text-transform: uppercase; letter-spacing: .05em;
+  font-size: clamp(.6rem, .8vw, .75rem); padding: .55rem .6rem;
+  border-bottom: 2px solid var(--teal); }
+.data-table td { padding: .45rem .6rem; border-bottom: 1px solid var(--line);
+  color: var(--ink); vertical-align: top; line-height: 1.45; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table td:first-child { font-weight: 600; color: var(--navy); }
+
+/* Code */
+.code { background: #0F1A33; color: #E1E7F2; padding: clamp(.6rem, 1.4vw, 1.2rem);
+  border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(.65rem, .95vw, .85rem); line-height: 1.5;
+  overflow: hidden; margin: 0; border-left: 3px solid var(--teal); white-space: pre-wrap; word-break: break-all; }
+.code.small { font-size: clamp(.6rem, .85vw, .75rem); }
+
+/* Image slides */
+.image-body { align-items: center; justify-content: center; flex: 1; min-height: 0; }
+.diagram { max-width: min(100%, 1100px); max-height: 60vh; object-fit: contain;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+.caption { color: var(--grey); font-style: italic;
+  font-size: clamp(.7rem, .95vw, .85rem); text-align: center;
+  max-width: 80ch; margin: .5rem auto 0; }
+
+/* Aside note */
+.aside { color: var(--grey); font-style: italic;
+  font-size: clamp(.7rem, .95vw, .85rem); margin: .5rem 0 0 0; }
+.kicker { display: block; color: var(--teal); font-size: .65rem;
+  letter-spacing: .08em; text-transform: uppercase; margin-bottom: .35rem; }
+.verify { margin-top: auto; }
+
+/* Warn */
+.warn-note { background: #FFF6E5; border-left: 3px solid #E0A41B;
+  padding: clamp(.5rem, 1.2vw, 1rem); border-radius: 4px;
+  margin-top: clamp(.5rem, 1vw, 1rem); }
+.warn-note p { margin: 0; color: var(--ink);
+  font-size: clamp(.7rem, .95vw, .85rem); line-height: 1.4; }
+
+/* ADR / challenge cards */
+.adr-stack, .challenge-grid { display: flex; flex-direction: column;
+  gap: clamp(.5rem, 1.2vw, 1rem); }
+.adr-card, .challenge-card {
+  background: var(--pale); border-left: 3px solid var(--teal);
+  padding: clamp(.5rem, 1.2vw, 1rem); border-radius: 4px;
+}
+.adr-title, .challenge-title { color: var(--navy); font-weight: 700;
+  font-size: clamp(.8rem, 1.1vw, .95rem); margin-bottom: .3rem; }
+.adr-card p, .challenge-card p { margin: 0; color: var(--ink);
+  font-size: clamp(.7rem, .95vw, .85rem); line-height: 1.45; }
+.challenge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(.5rem, 1vw, .9rem); }
+
+/* Evidence slides */
+.evidence-body { display: grid; gap: clamp(.6rem, 1.5vw, 1.2rem); }
+.evidence-body.cols-1 { grid-template-columns: 1fr; }
+.evidence-body.cols-2 { grid-template-columns: 1fr 1fr; }
+.evidence-body.cols-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.evidence-tile {
+  background: var(--pale);
+  border: 1.5px dashed var(--grey);
+  border-radius: 6px;
+  padding: clamp(.8rem, 2vw, 1.5rem);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 0;
+  text-align: center;
+}
+.ev-code { color: var(--teal); font-family: 'Archivo', sans-serif;
+  font-weight: 800; font-size: clamp(1.6rem, 3vw, 2.6rem); line-height: 1; }
+.ev-label { color: var(--navy); font-size: clamp(.75rem, 1vw, .9rem);
+  margin-top: .5rem; font-style: italic; max-width: 50ch; line-height: 1.4; }
+.ev-hint { color: var(--grey); font-size: clamp(.55rem, .75vw, .7rem);
+  margin-top: .4rem; text-transform: uppercase; letter-spacing: .08em; }
+.evidence-tile.has-img { padding: clamp(.4rem, 1vw, .8rem); }
+.evidence-tile.has-img .ev-code { font-size: clamp(1rem, 1.6vw, 1.4rem); }
+.evidence-tile.has-img .ev-label { font-size: clamp(.65rem, .85vw, .8rem); margin-top: .25rem; margin-bottom: .5rem; }
+.evidence-img { max-width: 100%; max-height: 100%; object-fit: contain;
+  border-radius: 4px; border: 1px solid var(--grey); flex: 1 1 auto; min-height: 0; }
+.slide-evidence .slide-body { padding-top: clamp(.5rem, 1.5vw, 1.5rem); }
+.slide-evidence.cols-4 { /* tighter */ }
+
+/* Closing */
+.slide-closing { background: var(--navy); color: var(--paper); }
+.closing-grid { flex: 1; padding: clamp(2rem, 5vw, 4rem);
+  display: grid; align-content: center; gap: clamp(.8rem, 2vw, 2rem); }
+.closing-brand { color: var(--teal); font-family: 'Archivo', sans-serif;
+  font-weight: 800; letter-spacing: .04em; font-size: clamp(.9rem, 1.2vw, 1.2rem); }
+.closing-headline { font-size: clamp(3rem, 7vw, 6rem); line-height: 1;
+  margin: clamp(.5rem, 1.5vw, 1.5rem) 0; color: var(--paper); }
+.closing-headline .accent { color: var(--teal); }
+.closing-meta { display: grid; grid-template-columns: 1fr 1fr;
+  gap: clamp(.6rem, 1.5vw, 1.2rem); margin-top: clamp(1rem, 2vw, 2rem); }
+.closing-meta dt { color: var(--teal); font-size: .7rem;
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: .2rem; }
+.closing-meta dd { margin: 0; font-weight: 600;
+  font-size: clamp(.85rem, 1.1vw, 1.05rem); color: var(--paper); }
+.closing-foot { border-top: 1px solid rgba(255,255,255,.15);
+  padding-top: clamp(.5rem, 1vw, 1rem); color: rgba(255,255,255,.6);
+  font-size: clamp(.7rem, .95vw, .85rem); }
+
+/* Nav */
+.nav-dots { position: fixed; right: clamp(.8rem, 1.5vw, 1.5rem); top: 50%;
+  transform: translateY(-50%); display: flex; flex-direction: column;
+  gap: .35rem; z-index: 50; }
+.nav-dots button { width: .55rem; height: .55rem; border-radius: 50%;
+  border: 1px solid var(--grey); background: transparent; cursor: pointer;
+  padding: 0; transition: all .2s; }
+.nav-dots button.active { background: var(--teal); border-color: var(--teal);
+  transform: scale(1.4); }
+
+/* Edit mode */
+.edit-mode [contenteditable="true"] { outline: 1.5px dashed var(--teal);
+  outline-offset: 4px; cursor: text; }
+.edit-mode [contenteditable="true"]:hover { background: rgba(43,179,163,.08); }
+.edit-toggle { position: fixed; top: 1rem; left: 1rem; z-index: 100;
+  background: var(--navy); color: var(--paper); border: none; padding: .5rem .8rem;
+  font-family: 'Archivo', sans-serif; font-weight: 700; font-size: .7rem;
+  border-radius: 4px; cursor: pointer; opacity: .15; transition: opacity .2s;
+  letter-spacing: .06em; text-transform: uppercase; }
+.edit-toggle:hover, .edit-mode .edit-toggle { opacity: 1; }
+.edit-mode .edit-toggle { background: var(--teal); }
+
+@media print {
+  .nav-dots, .edit-toggle { display: none !important; }
+  .slide { page-break-after: always; }
+}
+
+</style>
+</head>
+<body>
+<button class="edit-toggle" id="editToggle" title="Toggle edit mode (E)">Edit</button>
+<nav class="nav-dots" id="navDots"></nav>
+
+
+<section class="slide slide-cover">
+  <div class="cover-grid">
+    <div class="cover-brand">insider-one-devops</div>
+    <div class="cover-tag">case-study v0.1.0 · technical brief</div>
+    <h1 class="cover-headline">A four-day end-to-end<br><span class="accent">DevOps slice.</span></h1>
+    <p class="cover-summary">
+      Tiny Go HTTP service · multi-stage container · Helm chart on minikube ·<br>
+      GitHub Actions CI with cosign + SBOM + Trivy · Prometheus / Grafana ·<br>
+      public URL via EC2 + Elastic IP.
+    </p>
+    <div class="cover-meta">
+      <div><span class="label">Author</span><span class="value">Bora İlci</span></div>
+      <div><span class="label">Date</span><span class="value">2026-05-19</span></div>
+      <div><span class="label">Repository</span><span class="value">github.com/borailci/insider-one-devops</span></div>
+    </div>
+    <div class="cover-track">Track A · Minikube on AWS EC2 + Elastic IP · v0.1.0</div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 1 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§1  WHAT WE BUILT</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§1</div>
+  <h1 class="slide-title">What we built</h1>
+  <p class="slide-subtitle">A reproducible production-style slice — no application complexity, all the DevOps surface.</p>
+</div>
+  <div class="slide-body">
+    <p class="prose">A tiny Go HTTP service exposing four endpoints — /ping, /healthz, /version, and /metrics — packaged in a multi-stage distroless non-root container, deployed to single-node minikube via a Helm chart, served publicly through an Elastic IP-bound EC2 instance in eu-north-1. A GitHub Actions pipeline lints, tests, scans, signs, and attests every image before it lands on GHCR, and rolls the new revision onto the live cluster through SSM Run-Command — no SSH key ever leaves the workflow.</p>
+    <div class="stat-grid"><div class="stat-tile"><div class="stat-value">4</div><div class="stat-label">endpoints</div></div>
+<div class="stat-tile"><div class="stat-value">7</div><div class="stat-label">CI jobs</div></div>
+<div class="stat-tile"><div class="stat-value">15 MB</div><div class="stat-label">image</div></div>
+<div class="stat-tile"><div class="stat-value">$0.05/hr</div><div class="stat-label">live cost</div></div>
+<div class="stat-tile"><div class="stat-value">3</div><div class="stat-label">ADRs</div></div>
+<div class="stat-tile"><div class="stat-value">10+</div><div class="stat-label">bonus features</div></div></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 2 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§2  REPOSITORY LAYOUT</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§2</div>
+  <h1 class="slide-title">Repository layout</h1>
+  <p class="slide-subtitle">Every directory has a single purpose; cross-references are explicit.</p>
+</div>
+  <div class="slide-body">
+    <pre class="tree">.
+├── main.go              service · routes · middleware · graceful shutdown
+├── Dockerfile           multi-stage → distroless static:nonroot · ~15 MB
+├── Makefile             build · test · docker · demo · diagrams · sign-verify
+├── charts/              app chart (helm-create lineage) + policies/ (Kyverno)
+├── .github/workflows/   7-job CI pipeline (see §9)
+├── terraform/           EC2 + EIP + SG + OIDC role (local state)
+├── scripts/             bootstrap-ec2.sh: docker, minikube, helm, kyverno, app
+├── dashboards/          Grafana JSON dashboard
+└── docs/                3 ADRs · architecture.md · diagrams · WORKFLOW · CHECKLIST</pre>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 3 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§3  ARCHITECTURE — DEPLOYMENT VIEW</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§3</div>
+  <h1 class="slide-title">Architecture — deployment view</h1>
+  <p class="slide-subtitle">Physical placement: where each component runs.</p>
+</div>
+  <div class="slide-body image-body">
+    <img class="diagram" src="assets/slide4_img1.png" alt="Architecture — deployment view">
+    <p class="caption">Figure 1.  Code → CI → signed image → live cluster; no SSH, no long-lived secrets.</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 4 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§4  ARCHITECTURE — CONTAINER VIEW</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§4</div>
+  <h1 class="slide-title">Architecture — container view</h1>
+  <p class="slide-subtitle">What runs inside the minikube cluster, and how traffic + telemetry flow.</p>
+</div>
+  <div class="slide-body image-body">
+    <img class="diagram" src="assets/slide5_img1.png" alt="Architecture — container view">
+    <p class="caption">Figure 2.  App + observability + policy — each in its own namespace, single cluster.</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 5 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§5  ARCHITECTURE — SYSTEM CONTEXT</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§5</div>
+  <h1 class="slide-title">Architecture — system context</h1>
+  <p class="slide-subtitle">Who interacts with the system, across which trust boundaries.</p>
+</div>
+  <div class="slide-body image-body">
+    <img class="diagram" src="assets/slide6_img1.png" alt="Architecture — system context">
+    <p class="caption">Figure 3.  Two people, four external systems, one box of code.</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 6 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§6  SERVICE INTERNALS — MAIN.GO</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§6</div>
+  <h1 class="slide-title">Service internals — main.go</h1>
+  <p class="slide-subtitle">stdlib net/http  ·  no framework, no DI, no codegen.</p>
+</div>
+  <div class="slide-body two-col">
+    <div class="col-left"><ul class="bullets"><li>Endpoints — /ping (plain pong), /healthz (200/503 on drain), /version (sha + build_time from ldflags), /metrics (Prometheus exposition).</li>
+<li>Config — env-only: PORT, LOG_LEVEL, BUILD_SHA, BUILD_TIME.</li>
+<li>Logs — slog JSON to stdout: ts, level, msg, request_id, plus access log per request.</li>
+<li>Request-ID middleware — echo X-Request-ID, else UUIDv4.</li>
+<li>Metrics middleware — http_requests_total{method,path,status} + http_request_duration_seconds.</li>
+<li>Shutdown — SIGTERM → /healthz returns 503; 10 s drain via context + sync.WaitGroup; exit 0.</li></ul></div>
+    <div class="col-right"><h3 class="col-head">Endpoint contract</h3><table class="data-table"><thead><tr><th>path</th><th>status</th><th>body</th></tr></thead><tbody><tr><td>/ping</td><td>200</td><td>pong</td></tr>
+<tr><td>/healthz</td><td>200 / 503</td><td>{&quot;status&quot;:&quot;ok|draining&quot;}</td></tr>
+<tr><td>/version</td><td>200</td><td>{&quot;sha&quot;:..,&quot;build_time&quot;:..}</td></tr>
+<tr><td>/metrics</td><td>200</td><td>text/plain; v=0.0.4</td></tr></tbody></table><p class="aside">Test coverage maps 1:1 to FR/AC IDs in SPEC.md (see main_test.go).</p></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 7 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§6a  EVIDENCE — SERVICE ENDPOINTS</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§6a</div>
+  <h1 class="slide-title">Evidence — service endpoints</h1>
+  <p class="slide-subtitle">Curl against the public Elastic IP — 200 on all four endpoints.</p>
+</div>
+  <div class="slide-body evidence-body cols-1"><div class="evidence-tile has-img">  <div class="ev-code">#01</div>  <div class="ev-label">endpoints — curl /ping /healthz /version /metrics — 200 OK on all four</div>  <img class="evidence-img" src="assets/ev01.png" alt="curl public endpoints — all 200"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 8 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§7  CONTAINER — DOCKERFILE</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§7</div>
+  <h1 class="slide-title">Container — Dockerfile</h1>
+  <p class="slide-subtitle">Multi-stage · cross-compile · distroless · nonroot.</p>
+</div>
+  <div class="slide-body two-col">
+    <div class="col-left"><ul class="bullets"><li>Builder pinned to $BUILDPLATFORM (native amd64 on GH runner).</li>
+<li>go.mod / go.sum copied separately → cached layer.</li>
+<li>go build cross-compiles via GOOS=$TARGETOS GOARCH=$TARGETARCH.</li>
+<li>-trimpath -s -w -X main.buildSHA / main.buildTime.</li>
+<li>Final stage = gcr.io/distroless/static-debian12:nonroot (UID 65532).</li>
+<li>COPY single static binary, no shell, no apt, no glibc.</li>
+<li>ENTRYPOINT [&quot;/app&quot;] — no flags, env-only config.</li></ul></div>
+    <div class="col-right"><pre class="code"><code>FROM --platform=$BUILDPLATFORM \
+  golang:1.25-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG TARGETOS=linux TARGETARCH=amd64
+ENV CGO_ENABLED=0
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath \
+      -ldflags &quot;-s -w \
+        -X main.buildSHA=$BUILD_SHA \
+        -X main.buildTime=$BUILD_TIME&quot; \
+      -o /out/app ./
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=builder /out/app /app
+USER nonroot:nonroot
+ENTRYPOINT [&quot;/app&quot;]</code></pre></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 9 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§8  HELM CHART</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§8</div>
+  <h1 class="slide-title">Helm chart</h1>
+  <p class="slide-subtitle">charts/app/  ·  helm-create lineage  ·  rendered as one bundle per overlay.</p>
+</div>
+  <div class="slide-body two-col">
+    <div class="col-left"><h3 class="col-head">Chart contents</h3><ul class="bullets"><li>Core    — Deployment · Service · Ingress · ConfigMap · Secret</li>
+<li>Posture — HPA · NetworkPolicy · PodDisruptionBudget</li>
+<li>Observe — ServiceMonitor · PrometheusRule</li>
+<li>Test    — test-connection · test-version (helm test)</li>
+<li>Hardened pod securityContext: runAsNonRoot · readOnlyRootFS ·</li>
+<li>allowPrivilegeEscalation:false · drop ALL caps · UID 65532</li></ul></div>
+    <div class="col-right"><h3 class="col-head">Dev vs prod overlay</h3><table class="data-table"><thead><tr><th>key</th><th>dev</th><th>prod</th></tr></thead><tbody><tr><td>replicaCount</td><td>1</td><td>2</td></tr>
+<tr><td>resources.req.cpu</td><td>25m</td><td>100m</td></tr>
+<tr><td>resources.req.mem</td><td>32Mi</td><td>128Mi</td></tr>
+<tr><td>resources.lim.cpu</td><td>100m</td><td>500m</td></tr>
+<tr><td>resources.lim.mem</td><td>64Mi</td><td>256Mi</td></tr>
+<tr><td>ingress.host</td><td>app.dev.local</td><td>&quot;&quot; (catch-all)</td></tr>
+<tr><td>serviceMonitor</td><td>—</td><td>enabled</td></tr>
+<tr><td>autoscaling</td><td>—</td><td>2–5 @ CPU 60%</td></tr>
+<tr><td>networkPolicy</td><td>—</td><td>default-deny</td></tr></tbody></table></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 10 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§8a  EVIDENCE — CHART ON CLUSTER</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§8a</div>
+  <h1 class="slide-title">Evidence — chart on cluster</h1>
+  <p class="slide-subtitle">Helm-rendered objects + chart tests + rollout history, executed via SSM.</p>
+</div>
+  <div class="slide-body evidence-body cols-2"><div class="evidence-tile has-img">  <div class="ev-code">#02</div>  <div class="ev-label">kubectl get pods -A — app · monitoring · kyverno · ingress all Running</div>  <img class="evidence-img" src="assets/ev02.png" alt="kubectl get pods -A — all Running"></div><div class="evidence-tile has-img">  <div class="ev-code">#03</div>  <div class="ev-label">helm list -A — app · kps · kyverno · policies all deployed</div>  <img class="evidence-img" src="assets/ev03.png" alt="helm list -A — all releases deployed"></div><div class="evidence-tile has-img">  <div class="ev-code">#04</div>  <div class="ev-label">helm test app --logs — both test pods Succeeded</div>  <img class="evidence-img" src="assets/ev04.png" alt="helm test app --logs — both Succeeded"></div><div class="evidence-tile has-img">  <div class="ev-code">#05</div>  <div class="ev-label">kubectl rollout history deployment/app-app + hpa</div>  <img class="evidence-img" src="assets/ev05.png" alt="rollout history + HPA"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 11 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§9  CI PIPELINE</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§9</div>
+  <h1 class="slide-title">CI pipeline</h1>
+  <p class="slide-subtitle">Seven jobs gated by branch protection  ·  push to main = green pipeline + signed image + live rollout.</p>
+</div>
+  <div class="slide-body image-body">
+    <img class="diagram" src="assets/slide12_img1.png" alt="CI pipeline">
+    <p class="caption">Figure 4.  Last green run on main — full pipeline target NFR-9 &lt; 8 min.</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 12 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§10  PIPELINE — PER-JOB</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§10</div>
+  <h1 class="slide-title">Pipeline — per-job</h1>
+  <p class="slide-subtitle">Each job owns a single concern and reports its own status to branch protection.</p>
+</div>
+  <div class="slide-body">
+    <table class="data-table"><thead><tr><th>job</th><th>needs</th><th>what it does</th></tr></thead><tbody><tr><td>lint</td><td>—</td><td>golangci-lint v1.62 (govet · staticcheck · errcheck · gosec)</td></tr>
+<tr><td>test</td><td>—</td><td>go test ./… -race -cover -count=1</td></tr>
+<tr><td>helm-validate</td><td>—</td><td>helm lint (dev + prod) · helm template | kubeconform 1.30</td></tr>
+<tr><td>gitleaks</td><td>—</td><td>full-history secret scan + custom .gitleaks.toml rule</td></tr>
+<tr><td>build-scan-push</td><td>lint, test, helm-validate, gitleaks</td><td>buildx · Trivy SARIF (gate on CRITICAL/HIGH) · cosign keyless · Syft SBOM · push GHCR</td></tr>
+<tr><td>integration-test</td><td>build-scan-push</td><td>pull image · kind cluster · helm install · curl /ping /healthz /version · helm test</td></tr>
+<tr><td>deploy</td><td>build-scan-push, integration-test</td><td>AWS OIDC AssumeRole → SSM Run-Command → kubectl set image + rollout status</td></tr></tbody></table>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 13 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§10a  EVIDENCE — CI RUN</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§10a</div>
+  <h1 class="slide-title">Evidence — CI run</h1>
+  <p class="slide-subtitle">Latest run on main · all seven jobs green · SARIF findings in Security tab.</p>
+</div>
+  <div class="slide-body evidence-body cols-2"><div class="evidence-tile has-img">  <div class="ev-code">#10</div>  <div class="ev-label">gh run view — 7 green checks on latest main</div>  <img class="evidence-img" src="assets/ev10.png" alt="GitHub Actions run — 7/7 green"></div><div class="evidence-tile has-img">  <div class="ev-code">#11</div>  <div class="ev-label">Trivy SARIF — Security tab · 0 CRITICAL · 0 HIGH</div>  <img class="evidence-img" src="assets/ev11.png" alt="GitHub Security tab — Trivy SARIF clean"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 14 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§11  PIPELINE TIMING</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§11</div>
+  <h1 class="slide-title">Pipeline timing</h1>
+  <p class="slide-subtitle">Last green run on main  ·  full pipeline target NFR-9 &lt; 8 min.</p>
+</div>
+  <div class="slide-body image-body">
+    <img class="diagram" src="assets/slide15_img1.png" alt="Pipeline timing">
+    <p class="caption">After 2026-05-19 optimisations: cross-compile saves ~4 min on build · single Trivy pass saves 5–7 s · integration pulls instead of rebuilds (–30 s on main).</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 15 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§12  IMAGES WE PUBLISH</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§12</div>
+  <h1 class="slide-title">Images we publish</h1>
+  <p class="slide-subtitle">Every image on GHCR is signed, attested, and reproducible.</p>
+</div>
+  <div class="slide-body">
+    <table class="data-table"><thead><tr><th>artifact</th><th>where</th><th>what</th></tr></thead><tbody><tr><td>ghcr.io/borailci/insider-one-devops:&lt;sha&gt;</td><td>GHCR · per-commit</td><td>Multi-arch (amd64 + arm64) OCI manifest list.</td></tr>
+<tr><td>ghcr.io/.../insider-one-devops:latest</td><td>GHCR · main only</td><td>Convenience tag pointing at most recent main build.</td></tr>
+<tr><td>&lt;digest&gt;.sig</td><td>GHCR · alongside image</td><td>cosign keyless signature (Fulcio cert + Rekor entry).</td></tr>
+<tr><td>&lt;digest&gt;.att</td><td>GHCR · alongside image</td><td>Syft CycloneDX SBOM as cosign attestation.</td></tr>
+<tr><td>trivy-results.sarif</td><td>Security tab</td><td>Trivy SARIF — CVEs as first-class findings (when repo is public).</td></tr></tbody></table>
+    <div class="verify">
+      <span class="kicker">Verify one-liner</span>
+      <pre class="code small"><code>cosign verify ghcr.io/borailci/insider-one-devops@&lt;digest&gt; --certificate-identity-regexp &#x27;...workflows/ci.yml@.*&#x27; --certificate-oidc-issuer https://token.actions.githubusercontent.com</code></pre>
+    </div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 16 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§12a  EVIDENCE — SUPPLY CHAIN</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§12a</div>
+  <h1 class="slide-title">Evidence — supply chain</h1>
+  <p class="slide-subtitle">Keyless cosign + SBOM attestation verified end-to-end from a public client.</p>
+</div>
+  <div class="slide-body evidence-body cols-2"><div class="evidence-tile has-img">  <div class="ev-code">#08</div>  <div class="ev-label">cosign verify — 3 green checks (claims · transparency log · cert)</div>  <img class="evidence-img" src="assets/ev08.png" alt="cosign verify — three green checks"></div><div class="evidence-tile has-img">  <div class="ev-code">#12</div>  <div class="ev-label">GHCR package — tags + digests + signatures listed publicly</div>  <img class="evidence-img" src="assets/ev12.png" alt="GHCR package page — tag, .sig, .att visible"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 17 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§13  INSTANCE SPECS</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§13</div>
+  <h1 class="slide-title">Instance specs</h1>
+  <p class="slide-subtitle">Single Terraform stack in eu-north-1  ·  destroy-when-idle  ·  no SSH key in CI.</p>
+</div>
+  <div class="slide-body two-col">
+    <div class="col-left"><table class="data-table"><thead><tr><th>component</th><th>value</th></tr></thead><tbody><tr><td>region</td><td>eu-north-1 (Stockholm)</td></tr>
+<tr><td>instance type</td><td>t3.medium (2 vCPU · 4 GiB)</td></tr>
+<tr><td>AMI</td><td>Amazon Linux 2023 (latest)</td></tr>
+<tr><td>root volume</td><td>20 GiB gp3</td></tr>
+<tr><td>public IPv4</td><td>1 × Elastic IP (attached)</td></tr>
+<tr><td>security group</td><td>80/443 world · 22 narrowed</td></tr>
+<tr><td>instance profile</td><td>AmazonSSMManagedInstanceCore</td></tr>
+<tr><td>cluster</td><td>minikube · k8s 1.30 · ingress addon</td></tr>
+<tr><td>operator access</td><td>SSM Run-Command only (no SSH)</td></tr></tbody></table></div>
+    <div class="col-right"><h3 class="col-head">Monthly cost · if left running</h3><table class="data-table"><thead><tr><th>instance</th><th>$/hr</th><th>$/mo</th></tr></thead><tbody><tr><td>t3.medium (default)</td><td>$0.051</td><td>~$36.60</td></tr>
+<tr><td>t3.small</td><td>$0.030</td><td>~$21.30</td></tr>
+<tr><td>t3.micro</td><td>$0.019</td><td>~$13.40</td></tr></tbody></table><div class="warn-note"><span class="kicker">Account note</span><p>No free tier on AWS account 057548897384 — every EC2 hour is billable. terraform destroy after every demo.</p></div></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 18 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§14  OBSERVABILITY</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§14</div>
+  <h1 class="slide-title">Observability</h1>
+  <p class="slide-subtitle">kube-prometheus-stack via Helm  ·  ServiceMonitor scrapes /metrics  ·  PrometheusRule fires alerts  ·  Grafana visualises.</p>
+</div>
+  <div class="slide-body"><ul class="bullets"><li>kube-prometheus-stack — Prometheus + Alertmanager + Grafana, one Helm install.</li>
+<li>ServiceMonitor — scrapes app /metrics every 30 s on the named http port.</li>
+<li>PrometheusRule — two alerts:</li>
+<li>AppDown        — sum(up{job=app-app}) == 0  for: 2m  (critical)</li>
+<li>HighErrorRate  — 5xx ratio &gt; 5% for 2m  (warning)</li>
+<li>Grafana dashboard — RPS, p50/p95/p99, error rate, pod restarts (dashboards/app.json).</li></ul></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 19 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§14a  EVIDENCE — OBSERVABILITY</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§14a</div>
+  <h1 class="slide-title">Evidence — observability</h1>
+  <p class="slide-subtitle">Live Grafana dashboard + Prometheus alert rules behind SSM port-forward.</p>
+</div>
+  <div class="slide-body evidence-body cols-2"><div class="evidence-tile has-img">  <div class="ev-code">#06</div>  <div class="ev-label">Grafana dashboard — RPS · p50/p95/p99 latency · pod restarts · service up</div>  <img class="evidence-img" src="assets/ev06.png" alt="Grafana insider-one-devops — app dashboard"></div><div class="evidence-tile has-img">  <div class="ev-code">#07</div>  <div class="ev-label">app-app.rules — AppDown + HighErrorRate (both healthy)</div>  <img class="evidence-img" src="assets/ev07.png" alt="Grafana Alerting — app-app.rules with both rules green"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 20 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§15  POLICY AS CODE</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§15</div>
+  <h1 class="slide-title">Policy as code</h1>
+  <p class="slide-subtitle">Kyverno installed cluster-wide BEFORE any workload — admission is the gate, not docs.</p>
+</div>
+  <div class="slide-body">
+    <table class="data-table"><thead><tr><th>policy</th><th>rule</th></tr></thead><tbody><tr><td>disallow-latest-tag</td><td>Reject :latest image tags. Every image pinned to digest or SHA.</td></tr>
+<tr><td>require-non-root</td><td>runAsNonRoot must be true. UID 0 cannot exec inside the cluster.</td></tr>
+<tr><td>require-resources</td><td>Every container must declare CPU + memory requests and limits.</td></tr></tbody></table>
+    <div class="verify">
+      <span class="kicker">Live denial example</span>
+      <pre class="code small"><code>$ kubectl run nginx-bad --image=nginx:latest --restart=Never
+Error: admission webhook &quot;validate.kyverno.svc-fail&quot; denied the request — 3 policy violations:
+  · disallow-latest-tag  · require-non-root  · require-resources</code></pre>
+    </div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 21 / 26</span></div>
+</section>
+
+<section class="slide slide-evidence">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§15a  EVIDENCE — KYVERNO DENIAL</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§15a</div>
+  <h1 class="slide-title">Evidence — Kyverno denial</h1>
+  <p class="slide-subtitle">Admission webhook blocks a deliberately bad pod — three policies fire at once.</p>
+</div>
+  <div class="slide-body evidence-body cols-1"><div class="evidence-tile has-img">  <div class="ev-code">#09</div>  <div class="ev-label">kubectl run nginx:latest → admission webhook denied · 3 policy violations</div>  <img class="evidence-img" src="assets/ev09.png" alt="Kyverno denies bad pod with three policy violations"></div></div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 22 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§16  WHY THESE CHOICES</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§16</div>
+  <h1 class="slide-title">Why these choices</h1>
+  <p class="slide-subtitle">Each locked-in decision is committed as an ADR — these are the headlines.</p>
+</div>
+  <div class="slide-body">
+    <div class="adr-stack"><div class="adr-card"><div class="adr-title">ADR-0001  ·  TRACK A</div><p>Picked Track A (Minikube on EC2 + EIP) because Terraform + AWS OIDC give higher-signal DevOps evidence than a cloudflared / ngrok tunnel demo. Trade-off paid: hourly cost on a non-free-tier account → destroy-when-idle posture.</p></div><div class="adr-card"><div class="adr-title">ADR-0002  ·  GO + stdlib net/http</div><p>Picked Go because distroless static produces a non-root image under 15 MB, first-class Prometheus client, zero runtime dependencies. Stdlib net/http removes a whole class of CVE surface a framework would have added.</p></div><div class="adr-card"><div class="adr-title">ADR-0003  ·  kubectl set image via SSM</div><p>Picked direct rollout over ArgoCD/Flux because the case-study target is a single cluster — GitOps wins on N&gt;1 clusters. SSM keeps port 22 closed and audits every operator command in CloudTrail under the OIDC role.</p></div></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 23 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§17  CHALLENGES AND FIXES</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§17</div>
+  <h1 class="slide-title">Challenges and fixes</h1>
+  <p class="slide-subtitle">Every failure mode hit during the build  ·  what fixed it  ·  what it taught us.</p>
+</div>
+  <div class="slide-body">
+    <div class="challenge-grid"><div class="challenge-card"><div class="challenge-title">Helm template ate apiVersion</div><p>{{- if X -}} stripped the newline before apiVersion: when a comment preceded it. kubeconform reported &quot;missing apiVersion&quot; for 5 conditional templates. Fix: drop trailing - on the if-statement.</p></div><div class="challenge-card"><div class="challenge-title">Multi-arch build cost 5 minutes</div><p>QEMU emulation of arm64 Go compilation runs ~10× slower than native. Fix: cross-compile via GOARCH=$TARGETARCH on a native amd64 builder.</p></div><div class="challenge-card"><div class="challenge-title">Deploy needed a torn-down stack escape hatch</div><p>After terraform destroy the AWS_DEPLOY_ROLE_ARN / EC2_INSTANCE_ID secrets were unset and the deploy job failed STS. Fix: preflight step probes both secrets and emits configured=false, downstream OIDC + SSM steps gate on it — workflow stays green when the live stack is intentionally down.</p></div><div class="challenge-card"><div class="challenge-title">SARIF upload 403 on private repo</div><p>upload-sarif requires GitHub Advanced Security on private repos. Fix: continue-on-error: true while private; SARIF resumes when repo flips public.</p></div></div>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 24 / 26</span></div>
+</section>
+
+<section class="slide">
+  <div class="slide-header">
+  <span class="brand">insider-one-devops</span>
+  <span class="eyebrow">§18  BEYOND THE CONTRACT</span>
+</div>
+<div class="slide-title-block">
+  <div class="section-badge">§18</div>
+  <h1 class="slide-title">Beyond the contract</h1>
+  <p class="slide-subtitle">Bonus tracks delivered  ·  every entry traces to a file in the repo.</p>
+</div>
+  <div class="slide-body">
+    <table class="data-table"><thead><tr><th>theme</th><th>what landed</th></tr></thead><tbody><tr><td>Supply chain</td><td>cosign keyless · Syft CycloneDX SBOM · multi-arch (amd64 + arm64) · Trivy SARIF → Security tab</td></tr>
+<tr><td>K8s posture</td><td>HPA (2–5 @ CPU 60%) · NetworkPolicy default-deny · PodDisruptionBudget · Kyverno cluster policies</td></tr>
+<tr><td>Testing &amp; DX</td><td>helm tests (test-connection + test-version) · kind integration in CI · make demo one-shot local</td></tr>
+<tr><td>Docs</td><td>C4 PlantUML (context · container · deployment · pipeline) · STRIDE threat model · WORKFLOW + CHECKLIST</td></tr></tbody></table>
+    <p class="aside">Brief lists 6 bonus tracks  →  3 fully delivered, 1 partial (Custom metric + Slack — alerts done, Slack pending).</p>
+  </div>
+  <div class="slide-footer">  <span>insider-one-devops · case study v0.1.0</span>  <span>p. 25 / 26</span></div>
+</section>
+
+<section class="slide slide-closing">
+  <div class="closing-grid">
+    <div class="closing-brand">insider-one-devops</div>
+    <h1 class="closing-headline">Small. Reproducible.<br><span class="accent">Explainable.</span></h1>
+    <dl class="closing-meta">
+      <div><dt>Repository</dt><dd>github.com/borailci/insider-one-devops</dd></div>
+      <div><dt>Demo URL</dt><dd>http://&lt;EIP&gt;/{ping,healthz,version,metrics}</dd></div>
+      <div><dt>Docs</dt><dd>README · RUNBOOK · SECURITY · 3 ADRs · WORKFLOW · CHECKLIST</dd></div>
+      <div><dt>Contact</dt><dd>borailci16@gmail.com</dd></div>
+      <div><dt>Version</dt><dd>v0.1.0 · 2026-05-19</dd></div>
+    </dl>
+    <div class="closing-foot">© 2026 Bora İlci · submission for InsiderOne DevOps Internship Case Study 2026 v2</div>
+  </div>
+</section>
+
+<script>
+// === Edit mode (auto-save to localStorage) ===
+const STORAGE_KEY = 'insider-one-devops-deck-v1';
+let editMode = false;
+function loadEdits() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return;
+  try {
+    const edits = JSON.parse(saved);
+    Object.entries(edits).forEach(([id, html]) => {
+      const el = document.querySelector(`[data-edit-id="${id}"]`);
+      if (el) el.innerHTML = html;
+    });
+  } catch (e) { console.error('load edits failed', e); }
+}
+function saveEdits() {
+  const edits = {};
+  document.querySelectorAll('[data-edit-id]').forEach(el => {
+    edits[el.dataset.editId] = el.innerHTML;
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(edits));
+}
+function makeEditable() {
+  // Add data-edit-id + contenteditable to text-bearing leaves
+  const sel = 'h1, h2, h3, p, li, td, th, .stat-value, .stat-label, .ev-code, .ev-label, .cover-brand, .cover-tag, .cover-summary, .cover-track, .closing-brand, .closing-foot, .label, .value, dt, dd';
+  let i = 0;
+  document.querySelectorAll(sel).forEach(el => {
+    if (!el.dataset.editId) el.dataset.editId = 'e' + (i++);
+  });
+}
+function toggleEdit() {
+  editMode = !editMode;
+  document.body.classList.toggle('edit-mode', editMode);
+  document.querySelectorAll('[data-edit-id]').forEach(el => {
+    el.contentEditable = editMode ? 'true' : 'false';
+  });
+  document.getElementById('editToggle').textContent = editMode ? 'Save' : 'Edit';
+  if (!editMode) saveEdits();
+}
+document.getElementById('editToggle').addEventListener('click', toggleEdit);
+document.addEventListener('keydown', e => {
+  if ((e.key === 'e' || e.key === 'E') && !editMode &&
+      e.target === document.body) toggleEdit();
+  if ((e.ctrlKey || e.metaKey) && e.key === 's' && editMode) {
+    e.preventDefault(); saveEdits();
+    const btn = document.getElementById('editToggle');
+    const orig = btn.textContent; btn.textContent = 'Saved';
+    setTimeout(() => btn.textContent = orig, 1000);
+  }
+});
+makeEditable(); loadEdits();
+
+// === Nav dots ===
+const slides = document.querySelectorAll('.slide');
+const navEl = document.getElementById('navDots');
+slides.forEach((s, idx) => {
+  const b = document.createElement('button');
+  b.title = `Slide ${idx+1}`;
+  b.addEventListener('click', () => s.scrollIntoView({behavior:'smooth'}));
+  navEl.appendChild(b);
+});
+const dots = navEl.querySelectorAll('button');
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const idx = Array.from(slides).indexOf(e.target);
+      dots.forEach((d,i) => d.classList.toggle('active', i === idx));
+    }
+  });
+}, {threshold: 0.5});
+slides.forEach(s => io.observe(s));
+
+// === Keyboard nav ===
+document.addEventListener('keydown', e => {
+  if (editMode) return;
+  const cur = Array.from(slides).findIndex(s => {
+    const r = s.getBoundingClientRect();
+    return r.top >= -10 && r.top < window.innerHeight / 2;
+  });
+  if (cur < 0) return;
+  let next = cur;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') next = cur + 1;
+  if (e.key === 'ArrowLeft'  || e.key === 'PageUp') next = cur - 1;
+  if (next !== cur && next >= 0 && next < slides.length) {
+    e.preventDefault();
+    slides[next].scrollIntoView({behavior: 'smooth'});
+  }
+});
+</script>
+</body>
+</html>
