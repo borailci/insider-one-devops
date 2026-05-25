@@ -19,7 +19,7 @@ Traceability: FR-31, AC-35. Covers restart, logs, rollback, EC2 access, alerts. 
 | Helm release (obs) | `kps` |
 | GitHub Actions workflow | `.github/workflows/ci.yml` |
 | Image registry | `ghcr.io/borailci/insider-one-devops` |
-| Required GH secrets | `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID` |
+| Required GH secrets (when live) | `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID` — stripped by default so CI stays green without an EC2; re-set after `terraform apply`, see [§5a](#5a-re-enable-deploy-after-terraform-apply) |
 
 ---
 
@@ -139,6 +139,31 @@ gh workflow run ci.yml  # blank slate
 
 # Or push an empty commit:
 git commit --allow-empty -m "chore: force redeploy" && git push
+```
+
+---
+
+## 5a. Re-enable deploy after `terraform apply`
+
+The repo's default state has **no EC2 running** and **no deploy secrets set**. The CI `deploy` job detects the missing secrets and skips with `configured=false`, so the pipeline stays 7/7 green at zero cost.
+
+After `cd terraform && terraform apply -auto-approve`, restore the two secrets so the next push to `main` deploys to the fresh instance:
+
+```sh
+gh secret set AWS_DEPLOY_ROLE_ARN \
+  -b "$(cd terraform && terraform output -raw github_deploy_role_arn)"
+gh secret set EC2_INSTANCE_ID \
+  -b "$(cd terraform && terraform output -raw ec2_instance_id)"
+```
+
+No source-code edits are needed. The IAM role name is deterministic, so `github_deploy_role_arn` is stable across applies; the EC2 instance ID changes on every apply.
+
+To tear down again and return to the always-green state:
+
+```sh
+cd terraform && terraform destroy -auto-approve
+gh secret delete AWS_DEPLOY_ROLE_ARN
+gh secret delete EC2_INSTANCE_ID
 ```
 
 ---
