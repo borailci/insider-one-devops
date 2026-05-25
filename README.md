@@ -17,7 +17,7 @@ The contract is in [`SPEC.md`](./SPEC.md). Every change in this repo traces to a
 | Method | Path       | Response                                                 |
 |--------|------------|----------------------------------------------------------|
 | GET    | `/ping`    | `pong` (text/plain)                                      |
-| GET    | `/healthz` | `{"status":"ok"}` (200) or `{"status":"draining"}` (503) |
+| GET    | `/healthz` | `{"status":"ok"}` (200) or `{"status":"draining"}` (503) — see note below |
 | GET    | `/version` | `{"sha":"<git-sha>","build_time":"<RFC3339>"}`           |
 | GET    | `/metrics` | Prometheus exposition format                             |
 
@@ -41,6 +41,8 @@ PORT=9090 LOG_LEVEL=debug go run .
 ```
 
 See `.env.example` for the full list of supported variables.
+
+> **`/healthz` via the public ingress** — `nginx-ingress-controller` registers its own `location /healthz` at the HTTP-server level (used internally for its own liveness probe). On a minikube minikube-ingress-addon install, that server-level location wins over the ingress rule and returns an empty `200 text/html` for `GET <EIP>/healthz`. The app's `/healthz` itself is correct and returns `{"status":"ok"}` — confirm with a direct `kubectl port-forward svc/app-app 8080:80` and `curl localhost:8080/healthz`. The other three endpoints are unaffected, and Kubernetes probes use the in-cluster Service (not the ingress), so liveness/readiness still work as designed.
 
 One-command end-to-end on a fresh laptop (minikube + chart + helm tests + smoke curl):
 

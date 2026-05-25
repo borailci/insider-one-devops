@@ -187,6 +187,18 @@ for crd in servicemonitors.monitoring.coreos.com prometheusrules.monitoring.core
     || log "WARN: CRD ${crd} not Established — app install may fail on prod values"
 done
 
+# --- 6b. Custom Grafana dashboard ----------------------------------------
+# kube-prometheus-stack ships a Grafana sidecar that auto-imports any ConfigMap
+# in the namespace labelled grafana_dashboard=1. Drop the project's golden-
+# signals dashboard in so it appears under Dashboards → "insider-one-devops — app".
+
+log "installing custom grafana dashboard"
+sudo -iu ec2-user bash -c "kubectl -n ${MONITORING_NAMESPACE} create configmap app-dashboard \
+    --from-file=app.json=${REPO_ROOT}/dashboards/app.json \
+    -o yaml --dry-run=client | kubectl apply -f -" \
+  && sudo -iu ec2-user bash -c "kubectl -n ${MONITORING_NAMESPACE} label cm app-dashboard grafana_dashboard=1 --overwrite" \
+  || log "WARN: failed to install custom grafana dashboard"
+
 # --- 7. App chart ----------------------------------------------------------
 
 log "installing app via helm (image tag ${APP_IMAGE_TAG})"
